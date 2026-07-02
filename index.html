@@ -1566,6 +1566,22 @@ const registerExamClass = async (examId, className) => {
 };
 
 // ─── AI PARSER (Groq) ─────────────────────────────────────────────────────────
+const GROQ_AI_MODEL = 'qwen/qwen3.6-27b';
+const GROQ_AI_BUSY_MSG = 'AI систем ачаалалтай байна, түр хүлээгээд дахин оролдоно уу';
+
+const getGroqUserError = (status, apiMessage) => {
+  const msg = (apiMessage || '').toLowerCase();
+  if (status === 429 || status === 404) return GROQ_AI_BUSY_MSG;
+  if (/rate.?limit|quota|overloaded|capacity|deprecated|decommission|not found|model.*not.*found|too many requests|unavailable|shut\s?down/i.test(msg)) {
+    return GROQ_AI_BUSY_MSG;
+  }
+  return apiMessage || `HTTP ${status}`;
+};
+
+const reportGroqError = (userMessage) => {
+  if (userMessage === GROQ_AI_BUSY_MSG) alert(userMessage);
+};
+
 const parseTestWithAI = async (rawText, apiKey) => {
   const sys = `You are an exam question parser. Parse the multiple-choice questions from the given text and return ONLY a valid JSON array. Nothing else — no markdown, no explanation, just the JSON array.
 
@@ -1589,30 +1605,42 @@ Rules:
 - Always include exactly 4 options per question; if missing, create plausible distractors
 - Return ONLY the JSON array`;
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: 4096,
-      messages: [
-        { role: 'system', content: sys },
-        { role: 'user', content: rawText }
-      ]
-    })
-  });
+  let response;
+  try {
+    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: GROQ_AI_MODEL,
+        max_tokens: 4096,
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: rawText }
+        ]
+      })
+    });
+  } catch {
+    reportGroqError(GROQ_AI_BUSY_MSG);
+    throw new Error(GROQ_AI_BUSY_MSG);
+  }
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${response.status}`);
+    const userMessage = getGroqUserError(response.status, err.error?.message);
+    reportGroqError(userMessage);
+    throw new Error(userMessage);
   }
   const data = await response.json();
   const text = data.choices?.[0]?.message?.content?.trim() || '';
   const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-  return JSON.parse(clean);
+  try {
+    return JSON.parse(clean);
+  } catch {
+    throw new Error('AI хариултыг JSON болгон задлахад алдаа гарлаа. Дахин оролдоно уу.');
+  }
 };
 
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
@@ -1806,7 +1834,8 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
       if (!Array.isArray(qs) || qs.length === 0) throw new Error('Асуулт илрэхгүй байна');
       onParsed(qs);
     } catch (e) {
-      setErr('Алдаа: ' + e.message);
+      const msg = e?.message || 'Тодорхойгүй алдаа';
+      setErr('Алдаа: ' + msg);
     } finally {
       setParsing(false);
     }
@@ -2021,7 +2050,8 @@ function CreateExam({ apiKey, onSave, onCancel }) {
       setShowInlineAI(false);
       setInlineRaw('');
     } catch (e) {
-      setInlineErr('Алдаа: ' + e.message);
+      const msg = e?.message || 'Тодорхойгүй алдаа';
+      setInlineErr('Алдаа: ' + msg);
     } finally {
       setInlineParsing(false);
     }
