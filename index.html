@@ -3,15 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://www.gstatic.com https://cdn.jsdelivr.net https://docs.opencv.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.groq.com https://*.googleapis.com https://*.cloudfunctions.net; frame-ancestors 'none'; base-uri 'self'">
 <title>SmartEXAM — Ухаалаг Шалгалтын Систем</title>
-<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
+<script src="js/se-security.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -904,6 +908,157 @@ h1,h2,h3,h4 { font-family: 'Outfit', sans-serif; }
 .omr-key-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
 .omr-key-row label { min-width: 28px; font-weight: 700; }
 .omr-preview-img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); margin-top: 12px; }
+
+/* ─── SUBJECT CARDS (Create Exam Step 1) ─────────────────────────────────── */
+.subject-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 640px) {
+  .subject-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.subject-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 18px 12px; border-radius: 14px; border: 2px solid var(--border);
+  background: white; cursor: pointer; transition: all .18s ease;
+  font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.88rem;
+  color: var(--text); text-align: center;
+}
+.subject-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.subject-card.selected {
+  border-color: var(--subject-color, var(--primary));
+  background: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(59,91,219,.15);
+}
+.subject-card-icon {
+  width: 48px; height: 48px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+  background: var(--surface2);
+}
+.subject-card-fmt {
+  font-family: 'DM Sans', sans-serif; font-size: 0.68rem; font-weight: 500;
+  color: var(--text3); line-height: 1.3;
+}
+
+/* ─── FORMAT PREVIEW CARDS ───────────────────────────────────────────────── */
+.format-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+@media (max-width: 640px) { .format-grid { grid-template-columns: 1fr; } }
+.format-card {
+  padding: 16px; border-radius: 12px; border: 2px solid var(--border);
+  background: white; cursor: pointer; transition: all .15s;
+}
+.format-card:hover { border-color: var(--primary); }
+.format-card.selected { border-color: var(--primary); background: var(--primary-light); }
+.format-card-title { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+.format-card-desc { font-size: 0.78rem; color: var(--text2); line-height: 1.45; }
+
+/* ─── AI GENERATOR ───────────────────────────────────────────────────────── */
+.ai-gen-types { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.ai-type-chip {
+  padding: 8px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: white; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  transition: all .15s; color: var(--text2);
+}
+.ai-type-chip:hover { border-color: var(--violet); color: var(--violet); }
+.ai-type-chip.selected { background: var(--violet); border-color: var(--violet); color: white; }
+.ai-success-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; border-radius: 12px; margin-top: 14px;
+  background: var(--green-light); border: 1.5px solid #a7f3d0;
+  color: var(--green); font-weight: 700;
+}
+
+/* ─── TRUE/FALSE & GRID-IN UI ────────────────────────────────────────────── */
+.tf-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.tf-btn {
+  flex: 1; min-width: 140px; padding: 14px 18px; border-radius: 12px;
+  border: 2px solid var(--border); background: white; cursor: pointer;
+  font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem;
+  transition: all .15s; text-align: center;
+}
+.tf-btn.true:hover, .tf-btn.true.selected { border-color: var(--green); background: var(--green-light); color: var(--green); }
+.tf-btn.false:hover, .tf-btn.false.selected { border-color: var(--red); background: var(--red-light); color: var(--red); }
+.grid-in-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.grid-in-col {
+  display: flex; flex-direction: column; gap: 3px; align-items: center;
+}
+.grid-in-digit {
+  width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 700; cursor: pointer; background: white;
+  transition: all .1s;
+}
+.grid-in-digit.filled { background: var(--primary); border-color: var(--primary); color: white; }
+.grid-in-preview {
+  font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.2rem;
+  color: var(--primary); margin-top: 8px;
+}
+.source-box {
+  background: var(--amber-light); border: 1.5px solid #fcd34d; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px; font-size: 0.88rem; color: #92400e; line-height: 1.55;
+}
+.q-image-wrap {
+  margin-bottom: 12px; border-radius: 10px; overflow: hidden;
+  border: 1.5px solid var(--border); max-width: 360px;
+}
+.q-image-wrap img { width: 100%; display: block; max-height: 220px; object-fit: contain; background: #f8fafc; }
+.audio-player-box {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: linear-gradient(135deg, #f0ebff, #e8ecff); border-radius: 12px;
+  border: 1.5px solid #ddd6fe; margin-bottom: 12px;
+}
+.audio-player-box audio { flex: 1; height: 36px; max-width: 100%; }
+
+/* ─── OMR FORMAT VARIANTS (PRINT) ────────────────────────────────────────── */
+.omr-sheet.fmt-tf .omr-bubble { border-radius: 999px; width: 22mm; height: 7mm; }
+.omr-tf-label { font-size: 8pt; font-weight: 700; }
+.omr-gridin-table td { padding: 2px 3px; text-align: center; }
+.omr-gridin-digit {
+  display: inline-block; width: 5.5mm; height: 5.5mm; border: 1.5px solid #111;
+  border-radius: 50%; font-size: 6pt; line-height: 5.5mm; text-align: center;
+}
+.omr-format-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  background: #e0e7ff; color: #3730a3; font-size: 8pt; font-weight: 700; margin-top: 4px;
+}
+.omr-answers-list {
+  margin-top: 14px; max-height: 280px; overflow-y: auto;
+  background: var(--surface2); border-radius: 10px; padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+.omr-answers-list li {
+  display: flex; justify-content: space-between; padding: 4px 0;
+  font-size: 0.85rem; border-bottom: 1px dashed var(--border);
+}
+.omr-answers-list li:last-child { border-bottom: none; }
+
+/* ─── AI ANALYSIS DASHBOARD ──────────────────────────────────────────────── */
+.ai-analysis-card {
+  background: linear-gradient(135deg, #f0ebff 0%, #eef2ff 100%);
+  border: 1.5px solid #ddd6fe; border-radius: var(--radius); padding: 20px; margin-bottom: 18px;
+}
+.ai-analysis-title {
+  font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.05rem;
+  color: var(--violet); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+}
+.ai-advice-box {
+  background: white; border-radius: 10px; padding: 14px 16px;
+  border-left: 4px solid var(--violet); font-size: 0.88rem; color: var(--text);
+  line-height: 1.55; margin-bottom: 16px;
+}
+.bar-chart { display: flex; align-items: flex-end; gap: 10px; height: 140px; padding: 8px 0; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+.bar-fill {
+  width: 100%; max-width: 48px; border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, var(--primary), var(--violet));
+  min-height: 4px; transition: height .4s ease;
+}
+.bar-fill.weak { background: linear-gradient(180deg, #f87171, #dc2626); }
+.bar-lbl { font-size: 0.68rem; color: var(--text2); text-align: center; font-weight: 600; line-height: 1.2; }
+.bar-pct { font-size: 0.72rem; font-weight: 800; font-family: 'Outfit', sans-serif; color: var(--text); }
 </style>
 </head>
 <body>
@@ -913,7 +1068,81 @@ h1,h2,h3,h4 { font-family: 'Outfit', sans-serif; }
 const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const uid = () => (window.SESecurity ? SESecurity.secureUid(12) : (Date.now().toString(36) + Math.random().toString(36).slice(2, 10)));
+const sanitizeText = (s, max) => (window.SESecurity ? SESecurity.sanitizeText(s, max) : String(s || '').slice(0, max || 500));
+const escapeHtml = (s) => (window.SESecurity ? SESecurity.escapeHtml(s) : String(s || ''));
+
+const getAuth = () => {
+  const app = getFirebaseApp();
+  if (!app) return null;
+  try { return firebase.auth(app); } catch { return null; }
+};
+
+const getFunctions = () => {
+  const app = getFirebaseApp();
+  if (!app || !firebase.functions) return null;
+  try {
+    return app.functions('asia-southeast1');
+  } catch {
+    try { return firebase.functions(app); } catch { return null; }
+  }
+};
+
+const ensureStudentAuth = async () => {
+  const auth = getAuth();
+  if (!auth) throw new Error('Firebase Auth холбогдоогүй');
+  if (auth.currentUser) return auth.currentUser;
+  const cred = await auth.signInAnonymously();
+  return cred.user;
+};
+
+const ensureTeacherAuth = () => {
+  const auth = getAuth();
+  const u = auth?.currentUser;
+  if (!u || u.isAnonymous) return null;
+  return u;
+};
+
+const teacherSignIn = async (email, password) => {
+  const auth = getAuth();
+  if (!auth) throw new Error('Firebase Auth холбогдоогүй. Интернетээ шалгана уу.');
+  const cred = await auth.signInWithEmailAndPassword(String(email).trim(), password);
+  return cred.user;
+};
+
+const teacherSignUp = async (email, password, displayName) => {
+  const auth = getAuth();
+  if (!auth) throw new Error('Firebase Auth холбогдоогүй');
+  const cred = await auth.createUserWithEmailAndPassword(String(email).trim(), password);
+  if (displayName) {
+    try { await cred.user.updateProfile({ displayName: sanitizeText(displayName, 80) }); } catch {}
+  }
+  const db = getDb();
+  if (db) {
+    try {
+      await db.ref('teachers/' + cred.user.uid).set({
+        displayName: sanitizeText(displayName || email.split('@')[0], 80),
+        email: String(email).trim().toLowerCase(),
+        createdAt: new Date().toISOString()
+      });
+    } catch {}
+  }
+  return cred.user;
+};
+
+const teacherSignOut = async () => {
+  const auth = getAuth();
+  try { if (window.SESecurity) SESecurity.clearTeacherMeta(); } catch {}
+  if (auth) await auth.signOut();
+};
+
+const callGradeSubmission = async (payload) => {
+  const fns = getFunctions();
+  if (!fns) throw new Error('Cloud Functions байхгүй');
+  const callable = fns.httpsCallable('gradeSubmission');
+  const res = await callable(payload);
+  return res.data;
+};
 
 const useLS = (key, init) => {
   const [val, setVal] = useState(() => {
@@ -1014,21 +1243,151 @@ const normalizeVariants = (exam) => {
 };
 
 const roomRef = (db, roomID) => db.ref('activeRooms/' + roomID);
-const packQuestions = (questions) => (questions || []).map(q => ({
-  text: q.text || '',
-  options: (q.options || []).map(o => ({ key: o.key, text: o.text || '' })),
-  answer: q.answer ?? null
-}));
-const unpackQuestions = (questions) => (questions || []).map((q, idx) => ({
-  id: idx + 1,
-  text: q?.text || '',
-  options: ['A', 'B', 'C', 'D'].map((key, oi) => {
-    const hit = (q?.options || []).find(o => o?.key === key);
-    const byIndex = q?.options?.[oi];
-    return { key, text: (hit?.text ?? byIndex?.text ?? '') };
-  }),
-  answer: q?.answer ?? null
-}));
+const packQuestions = (questions) => {
+  if (window.SESecurity) return SESecurity.packQuestionsPublic(questions);
+  return (questions || []).map(q => ({
+    text: q.text || '',
+    options: (q.options || []).map(o => ({ key: o.key, text: o.text || '' })),
+    type: q.type || 'mcq',
+    topic: q.topic || '',
+    imageUrl: q.imageUrl || '',
+    sourceText: q.sourceText || '',
+    audioUrl: q.audioUrl || '',
+    unit: q.unit || ''
+  }));
+};
+const packAnswerKeys = (questions) => {
+  if (window.SESecurity) return SESecurity.packAnswerKeys(questions);
+  return (questions || []).map((q, i) => ({
+    id: i + 1,
+    type: q.type || 'mcq',
+    answer: q.answer ?? q.numericAnswer ?? null,
+    topic: q.topic || ''
+  }));
+};
+const unpackQuestions = (questions) => {
+  if (window.SESecurity) return SESecurity.unpackQuestionsPublic(questions);
+  return (questions || []).map((q, idx) => {
+  const type = q?.type || 'mcq';
+  let options;
+  if (type === 'tf') {
+    options = [
+      { key: 'A', text: q?.options?.[0]?.text || 'Зөв / Үнэн' },
+      { key: 'B', text: q?.options?.[1]?.text || 'Буруу / Худал' }
+    ];
+  } else if (type === 'grid') {
+    options = [];
+  } else {
+    options = ['A', 'B', 'C', 'D'].map((key, oi) => {
+      const hit = (q?.options || []).find(o => o?.key === key);
+      const byIndex = q?.options?.[oi];
+      return { key, text: (hit?.text ?? byIndex?.text ?? '') };
+    });
+  }
+  return {
+    id: idx + 1,
+    text: q?.text || '',
+    options,
+    answer: null,
+    type,
+    topic: q?.topic || '',
+    imageUrl: q?.imageUrl || '',
+    sourceText: q?.sourceText || '',
+    audioUrl: q?.audioUrl || '',
+    unit: q?.unit || '',
+    numericAnswer: null
+  };
+  });
+};
+
+// ─── SUBJECT PROFILES & OMR FORMATS ───────────────────────────────────────────
+const SUBJECT_PROFILES = [
+  { id: 'chemistry', name: 'Хими', icon: '🧪', color: '#059669', omrMode: 'mcq', features: ['image'],
+    formats: [
+      { id: 'mcq', label: 'Зурагтай A–D', desc: 'Диаграмм/зураг + 4 сонголттой OMR' }
+    ], qTypes: ['image', 'mcq', 'compare'] },
+  { id: 'biology', name: 'Биологи', icon: '🧬', color: '#10b981', omrMode: 'mcq', features: ['image'],
+    formats: [
+      { id: 'mcq', label: 'Зурагтай A–D', desc: 'Эсийн бүтэц гэх мэт зураг + 4 сонголт' }
+    ], qTypes: ['image', 'mcq', 'compare'] },
+  { id: 'math', name: 'Математик', icon: '📐', color: '#3b5bdb', omrMode: 'grid', features: ['grid'],
+    formats: [
+      { id: 'mcq', label: 'A–D сонголт', desc: 'Олон сонголттой стандарт формат' },
+      { id: 'grid', label: 'Grid-in (тоон)', desc: '3 баганат 0–9 тоогоор хариу будах' }
+    ], qTypes: ['calc', 'mcq'] },
+  { id: 'physics', name: 'Физик', icon: '⚡', color: '#0891b2', omrMode: 'grid', features: ['grid', 'unit'],
+    formats: [
+      { id: 'mcq', label: 'A–D сонголт', desc: 'Тооцоололтой олон сонголт' },
+      { id: 'grid', label: 'Grid-in + нэгж', desc: 'Тоон хариу + физикийн нэгж' }
+    ], qTypes: ['calc', 'mcq'] },
+  { id: 'mongolian', name: 'Монгол хэл', icon: '📖', color: '#d97706', omrMode: 'tf', features: ['source'],
+    formats: [
+      { id: 'tf', label: 'Зөв / Буруу', desc: 'Эх текст + Үнэн/Худал OMR' },
+      { id: 'mcq', label: 'A–D сонголт', desc: 'Уламжлалт олон сонголт' }
+    ], qTypes: ['mcq', 'compare'] },
+  { id: 'social', name: 'Нигэм', icon: '🏛', color: '#ca8a04', omrMode: 'tf', features: ['source'],
+    formats: [
+      { id: 'tf', label: 'Үнэн / Худал', desc: 'Сурвалж текст + True/False' },
+      { id: 'mcq', label: 'A–D сонголт', desc: 'Олон сонголттой асуулт' }
+    ], qTypes: ['mcq', 'compare'] },
+  { id: 'russian', name: 'Орос хэл', icon: '🎧', color: '#7c3aed', omrMode: 'mcq', features: ['audio'],
+    formats: [
+      { id: 'mcq', label: 'Сонсгол + A–D', desc: 'Аудио тоглуулагч + сонголт' },
+      { id: 'blank', label: 'Сул орон нөхөх', desc: 'Дүрмийн/үгийн сонголт' }
+    ], qTypes: ['mcq', 'blank'] },
+  { id: 'english', name: 'Англи хэл', icon: '🔤', color: '#db2777', omrMode: 'mcq', features: ['audio'],
+    formats: [
+      { id: 'mcq', label: 'Grammar A–D', desc: 'Дүрмийн сонголт + аудио' },
+      { id: 'blank', label: 'Fill-in blank', desc: 'Сул орон зай нөхөх' }
+    ], qTypes: ['mcq', 'blank'] }
+];
+
+const getSubjectProfile = (idOrName) => {
+  const s = (idOrName || '').toString().trim().toLowerCase();
+  return SUBJECT_PROFILES.find(p => p.id === s || p.name.toLowerCase() === s)
+    || SUBJECT_PROFILES.find(p => s.includes(p.name.toLowerCase()) || s.includes(p.id))
+    || null;
+};
+
+const AI_Q_TYPES = [
+  { id: 'image', label: '🖼 Зурагтай', desc: 'Диаграмм/зурагтай асуулт' },
+  { id: 'calc', label: '🔢 Тоон тооцоолол', desc: 'Тооцоолол / Grid-in' },
+  { id: 'mcq', label: '🅰 Олон сонголт', desc: 'A B C D сонголт' },
+  { id: 'compare', label: '⚖ Харьцуулах', desc: 'Харьцуулалт / зөв-буруу' },
+  { id: 'blank', label: '✏️ Сул орон', desc: 'Fill-in / дүрэм' }
+];
+
+const defaultOptionsForType = (type) => {
+  if (type === 'tf') return [{ key: 'A', text: 'Зөв / Үнэн' }, { key: 'B', text: 'Буруу / Худал' }];
+  if (type === 'grid') return [];
+  return [{ key: 'A', text: '' }, { key: 'B', text: '' }, { key: 'C', text: '' }, { key: 'D', text: '' }];
+};
+
+const seedQuestion = (type = 'mcq') => ({
+  id: 1,
+  text: '',
+  type,
+  options: defaultOptionsForType(type),
+  answer: null,
+  topic: '',
+  imageUrl: '',
+  sourceText: '',
+  audioUrl: '',
+  unit: '',
+  numericAnswer: null
+});
+
+const answersEqual = (got, expected, type) => {
+  if (expected == null || expected === '') return false;
+  const g = String(got ?? '').trim().toUpperCase();
+  const e = String(expected).trim().toUpperCase();
+  if (type === 'grid') {
+    const gn = String(got ?? '').replace(/[_\D]/g, '');
+    const en = String(expected).replace(/\D/g, '');
+    return gn.length > 0 && en.length > 0 && gn === en;
+  }
+  return g === e;
+};
 
 const csvCell = (v) => {
   const s = (v ?? '').toString();
@@ -1158,8 +1517,11 @@ const buildExamWithVariant = (roomExam, label) => {
     id: roomExam.roomID || roomExam.id,
     title: roomExam.title,
     subject: roomExam.subject,
+    subjectId: roomExam.subjectId,
     duration: roomExam.duration,
     passingScore: roomExam.passingScore,
+    omrFormat: roomExam.omrFormat || 'mcq',
+    omrMode: roomExam.omrMode || 'mcq',
     stopped: roomExam.stopped,
     variantLabel: label,
     variantIndex,
@@ -1202,9 +1564,11 @@ const assignBalancedVariant = (db, roomId, labels, studentName, classKey) => {
         throw new Error('Хувилбар томилох transaction амжилтгүй');
       }
       const pick = snap.val().lastPick;
+      const authUid = getAuth()?.currentUser?.uid || null;
       return studentRef.set({
         label: pick,
-        name: (studentName || '').trim(),
+        name: sanitizeText(studentName, 80),
+        uid: authUid,
         at: firebase.database.ServerValue.TIMESTAMP
       }).then(() => pick);
     });
@@ -1275,14 +1639,31 @@ const omrDefaultAnswerKey = () => Object.fromEntries(
   Array.from({ length: OMR_Q_COUNT }, (_, i) => [i + 1, ''])
 );
 
-const parseAnswerKeyText = (text) => {
+const parseAnswerKeyText = (text, omrMode = 'mcq') => {
   const key = omrDefaultAnswerKey();
   const parts = (text || '').split(/[\s,;]+/).filter(Boolean);
   parts.forEach(p => {
-    const m = p.match(/^(\d{1,2})\s*[-:.]?\s*([A-Da-d])$/);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      if (n >= 1 && n <= OMR_Q_COUNT) key[n] = m[2].toUpperCase();
+    if (omrMode === 'grid') {
+      const m = p.match(/^(\d{1,2})\s*[-:.]?\s*(\d{1,3})$/);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n >= 1 && n <= OMR_Q_COUNT) key[n] = m[2].padStart(3, '0').slice(-3);
+      }
+    } else if (omrMode === 'tf') {
+      const m = p.match(/^(\d{1,2})\s*[-:.]?\s*([ABab]|T|F|Ү|Х|З|Б)$/i);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        let v = m[2].toUpperCase();
+        if (v === 'T' || v === 'Ү' || v === 'З') v = 'A';
+        if (v === 'F' || v === 'Х' || v === 'Б') v = 'B';
+        if (n >= 1 && n <= OMR_Q_COUNT) key[n] = v;
+      }
+    } else {
+      const m = p.match(/^(\d{1,2})\s*[-:.]?\s*([A-Da-d])$/);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n >= 1 && n <= OMR_Q_COUNT) key[n] = m[2].toUpperCase();
+      }
     }
   });
   return key;
@@ -1386,11 +1767,26 @@ const findPaperQuadFallback = (cv, binary, w, h) => {
   return best;
 };
 
-const countBubbleFill = (mat, cx, cy, r) => {
+const countBubbleFill = (mat, cx, cy, r, cv) => {
   const x0 = Math.max(0, Math.floor(cx - r));
   const y0 = Math.max(0, Math.floor(cy - r));
   const x1 = Math.min(mat.cols - 1, Math.ceil(cx + r));
   const y1 = Math.min(mat.rows - 1, Math.ceil(cy + r));
+  const w = Math.max(1, x1 - x0 + 1);
+  const h = Math.max(1, y1 - y0 + 1);
+  try {
+    if (cv && typeof cv.countNonZero === 'function' && cv.Mat) {
+      const roi = mat.roi(new cv.Rect(x0, y0, w, h));
+      const mask = cv.Mat.zeros(h, w, cv.CV_8UC1);
+      cv.circle(mask, new cv.Point(Math.floor(cx - x0), Math.floor(cy - y0)), Math.max(1, Math.floor(r)), new cv.Scalar(255), -1);
+      const masked = new cv.Mat();
+      cv.bitwise_and(roi, roi, masked, mask);
+      const dark = cv.countNonZero(masked);
+      const total = cv.countNonZero(mask) || 1;
+      roi.delete(); mask.delete(); masked.delete();
+      return dark / total;
+    }
+  } catch (_) { /* fallback below */ }
   let dark = 0;
   let total = 0;
   const data = mat.data;
@@ -1401,25 +1797,46 @@ const countBubbleFill = (mat, cx, cy, r) => {
       const dy = y - cy;
       if (dx * dx + dy * dy > r * r) continue;
       total++;
-      if (data[y * cols + x] > 128) dark++; /* BINARY_INV: бөглөсөн = цагаан */
+      if (data[y * cols + x] > 128) dark++;
     }
   }
   return total ? dark / total : 0;
 };
 
-const readBubblesFromWarped = (cv, warpedGray) => {
+/** OMR layout coords by format — normalized 0–1 on sheet */
+const OMR_LAYOUTS = {
+  mcq: {
+    rowY0: 0.24, rowY1: 0.93, bubbleR: 0.018,
+    opts: ['A', 'B', 'C', 'D'],
+    bubbleX: [0.32, 0.46, 0.60, 0.74]
+  },
+  tf: {
+    rowY0: 0.24, rowY1: 0.93, bubbleR: 0.022,
+    opts: ['A', 'B'],
+    bubbleX: [0.40, 0.62]
+  },
+  grid: {
+    rowY0: 0.22, rowY1: 0.92, bubbleR: 0.011,
+    digits: ['0','1','2','3','4','5','6','7','8','9'],
+    colX: [0.42, 0.55, 0.68],
+    digitSpan: 0.65
+  }
+};
+
+const readMcqOrTfFromWarped = (cv, warpedGray, layout, qCount) => {
   const answers = {};
   const fills = {};
-  for (let q = 0; q < OMR_Q_COUNT; q++) {
-    const yNorm = OMR_ROW_Y0 + ((q + 0.5) / OMR_Q_COUNT) * (OMR_ROW_Y1 - OMR_ROW_Y0);
+  const opts = layout.opts;
+  for (let q = 0; q < qCount; q++) {
+    const yNorm = layout.rowY0 + ((q + 0.5) / qCount) * (layout.rowY1 - layout.rowY0);
     const cy = yNorm * OMR_SHEET_H;
     let best = null;
     let bestFill = 0;
     const rowFills = {};
-    OMR_OPTS.forEach((opt, oi) => {
-      const cx = OMR_BUBBLE_X[oi] * OMR_SHEET_W;
-      const r = OMR_BUBBLE_R * OMR_SHEET_W;
-      const fill = countBubbleFill(warpedGray, cx, cy, r);
+    opts.forEach((opt, oi) => {
+      const cx = layout.bubbleX[oi] * OMR_SHEET_W;
+      const r = layout.bubbleR * OMR_SHEET_W;
+      const fill = countBubbleFill(warpedGray, cx, cy, r, cv);
       rowFills[opt] = fill;
       if (fill > bestFill) { bestFill = fill; best = opt; }
     });
@@ -1429,7 +1846,47 @@ const readBubblesFromWarped = (cv, warpedGray) => {
   return { answers, fills };
 };
 
-const processOMRFrame = (cv, sourceCanvas) => {
+const readGridFromWarped = (cv, warpedGray, layout, qCount) => {
+  const answers = {};
+  const fills = {};
+  const digits = layout.digits;
+  const nDigits = digits.length;
+  for (let q = 0; q < qCount; q++) {
+    const yBase = layout.rowY0 + (q / qCount) * (layout.rowY1 - layout.rowY0);
+    const ySpan = ((layout.rowY1 - layout.rowY0) / qCount) * layout.digitSpan;
+    let num = '';
+    const rowFills = {};
+    layout.colX.forEach((colXn, ci) => {
+      let bestD = null;
+      let bestFill = 0;
+      const colFills = {};
+      digits.forEach((d, di) => {
+        const yNorm = yBase + ((di + 0.5) / nDigits) * ySpan;
+        const cy = yNorm * OMR_SHEET_H;
+        const cx = colXn * OMR_SHEET_W;
+        const r = layout.bubbleR * OMR_SHEET_W;
+        const fill = countBubbleFill(warpedGray, cx, cy, r, cv);
+        colFills[d] = fill;
+        if (fill > bestFill) { bestFill = fill; bestD = d; }
+      });
+      rowFills['col' + ci] = colFills;
+      if (bestFill >= 0.25) num += bestD;
+      else num += '_';
+    });
+    fills[q + 1] = rowFills;
+    const cleaned = num.replace(/_/g, '');
+    if (cleaned.length === 3) answers[q + 1] = cleaned;
+  }
+  return { answers, fills };
+};
+
+const readBubblesFromWarped = (cv, warpedGray, omrMode = 'mcq', qCount = OMR_Q_COUNT) => {
+  const mode = omrMode === 'tf' ? 'tf' : omrMode === 'grid' ? 'grid' : 'mcq';
+  if (mode === 'grid') return readGridFromWarped(cv, warpedGray, OMR_LAYOUTS.grid, qCount);
+  return readMcqOrTfFromWarped(cv, warpedGray, OMR_LAYOUTS[mode], qCount);
+};
+
+const processOMRFrame = (cv, sourceCanvas, omrMode = 'mcq', qCount = OMR_Q_COUNT) => {
   const src = cv.imread(sourceCanvas);
   const gray = new cv.Mat();
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
@@ -1460,7 +1917,7 @@ const processOMRFrame = (cv, sourceCanvas) => {
   const warpedBin = new cv.Mat();
   cv.adaptiveThreshold(warped, warpedBin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 15, 10);
 
-  const { answers, fills } = readBubblesFromWarped(cv, warpedBin);
+  const { answers, fills } = readBubblesFromWarped(cv, warpedBin, omrMode, qCount);
 
   const preview = document.createElement('canvas');
   preview.width = OMR_SHEET_W;
@@ -1472,21 +1929,21 @@ const processOMRFrame = (cv, sourceCanvas) => {
   src.delete(); gray.delete(); blurred.delete(); binary.delete();
   srcPts.delete(); dstPts.delete(); M.delete(); warped.delete();
 
-  return { ok: true, answers, fills, previewDataUrl };
+  return { ok: true, answers, fills, previewDataUrl, omrMode };
 };
 
-const gradeOMRAnswers = (answers, answerKey) => {
+const gradeOMRAnswers = (answers, answerKey, qCount = OMR_Q_COUNT) => {
   let correct = 0;
   const detail = {};
-  for (let q = 1; q <= OMR_Q_COUNT; q++) {
-    const expected = (answerKey[q] || '').toUpperCase();
-    const got = (answers[q] || '').toUpperCase();
-    const ok = expected && got === expected;
+  const total = qCount;
+  for (let q = 1; q <= total; q++) {
+    const expected = String(answerKey[q] ?? '').toUpperCase();
+    const got = String(answers[q] ?? '').toUpperCase();
+    const ok = !!(expected && got && expected === got);
     if (ok) correct++;
     detail[q] = { expected, got, ok };
   }
-  const total = OMR_Q_COUNT;
-  const score = Math.round((correct / total) * 100);
+  const score = total > 0 ? Math.round((correct / total) * 100) : 0;
   return { correct, total, score, detail };
 };
 
@@ -1509,11 +1966,12 @@ const pickVariantForStudent = async (roomExam, studentName, studentClass) => {
   return buildExamWithVariant(roomExam, label);
 };
 
-const fetchExamRoomByCode = (code) => {
+const fetchExamRoomByCode = async (code) => {
   const roomId = (code || '').trim();
   if (!roomId) return Promise.reject(new Error('Тестийн код оруулна уу'));
   const db = getDb();
   if (!db) return Promise.reject(new Error('Интернет/Firebase холбогдоогүй. Дахин оролдоно уу.'));
+  await ensureStudentAuth();
   return roomRef(db, roomId).once('value').then(snap => {
     const val = snap.val();
     if (!val || !val.versions) {
@@ -1525,23 +1983,29 @@ const fetchExamRoomByCode = (code) => {
       id: val.roomID || roomId,
       title: val.title || 'Шалгалт',
       subject: val.subject || '',
+      subjectId: val.subjectId || '',
       duration: val.duration || 45,
       passingScore: val.passingScore ?? 60,
+      omrFormat: val.omrFormat || 'mcq',
+      omrMode: val.omrMode || 'mcq',
+      ownerUid: val.ownerUid || '',
       stopped: !!val.stopped,
       versions: val.versions,
       createdAt: val.createdAt
+      // answerKeys intentionally omitted — never sent to student client from this path
     };
   });
 };
 
-const announceStudentJoin = (roomId, name, studentClass) => {
-  const cls = (studentClass || '').trim();
+const announceStudentJoin = async (roomId, name, studentClass) => {
+  const cls = sanitizeText(studentClass, 40);
   const classKey = normalizeClassKey(cls);
   const db = getDb();
   if (!db || !roomId) return;
   try {
+    await ensureStudentAuth();
     roomRef(db, roomId).child('joins').push({
-      name: (name || '').trim(),
+      name: sanitizeText(name, 80),
       cls,
       classKey,
       via: 'code',
@@ -1643,6 +2107,156 @@ Rules:
   }
 };
 
+const groqChat = async (apiKey, systemPrompt, userPrompt, maxTokens = 4096) => {
+  let response;
+  try {
+    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: GROQ_AI_MODEL,
+        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      })
+    });
+  } catch {
+    reportGroqError(GROQ_AI_BUSY_MSG);
+    throw new Error(GROQ_AI_BUSY_MSG);
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const userMessage = getGroqUserError(response.status, err.error?.message);
+    reportGroqError(userMessage);
+    throw new Error(userMessage);
+  }
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content?.trim() || '';
+  return text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+};
+
+/** AI асуулт үүсгэгч — сэдэв + төрлөөр JSON асуулт үүсгэнэ */
+const generateQuestionsWithAI = async ({ apiKey, subject, topic, qType, count = 5, format = 'mcq' }) => {
+  const typeHint = {
+    image: 'image-based diagram questions (describe what image would show in text field as [ЗУРАГ: ...])',
+    calc: 'numerical calculation questions; for grid format use type "grid" with numericAnswer as 3-digit string',
+    mcq: 'standard multiple choice A-D',
+    compare: 'comparison or true/false style',
+    blank: 'fill-in-the-blank grammar/vocabulary with options'
+  }[qType] || 'multiple choice';
+
+  const schema = `Return ONLY a valid JSON array. Each item:
+{
+  "id": <number>,
+  "text": "<question in Mongolian or subject language>",
+  "type": "mcq"|"tf"|"grid"|"blank",
+  "topic": "<topic>",
+  "options": [{"key":"A","text":"..."}, ...],  // empty for grid; 2 opts for tf
+  "answer": "<A|B|C|D or 3-digit for grid>",
+  "sourceText": "<optional passage for Mongolian/Social>",
+  "imageUrl": "",
+  "audioUrl": "",
+  "unit": "<optional physics unit e.g. m/s>",
+  "numericAnswer": "<optional 3-digit string for grid>"
+}`;
+
+  const sys = `You are an expert exam question generator for Mongolian secondary schools (SmartEXAM).
+Generate high-quality ${typeHint} questions for subject "${subject}".
+Preferred exam format: ${format}.
+${schema}
+Rules:
+- Write questions appropriate for grades 6-12
+- Always mark the correct answer
+- For tf: options A="Зөв / Үнэн", B="Буруу / Худал", answer A or B
+- For grid/calc: type="grid", numericAnswer 3 digits padded, answer same as numericAnswer, options=[]
+- For image: put [ЗУРАГ: brief description] in text
+- Return ONLY JSON array, no markdown`;
+
+  const user = `Subject: ${subject}\nTopic: ${topic}\nQuestion type: ${qType}\nFormat: ${format}\nCount: ${count}\nGenerate ${count} questions now.`;
+  const clean = await groqChat(apiKey, sys, user, 4096);
+  let parsed;
+  try { parsed = JSON.parse(clean); } catch {
+    throw new Error('AI хариултыг JSON болгон задлахад алдаа гарлаа. Дахин оролдоно уу.');
+  }
+  if (!Array.isArray(parsed)) throw new Error('AI массив буцаасангүй');
+  return parsed.map((q, i) => {
+    const type = q.type || (format === 'tf' ? 'tf' : format === 'grid' ? 'grid' : 'mcq');
+    const opts = type === 'grid' ? [] : (q.options && q.options.length ? q.options : defaultOptionsForType(type));
+    return {
+      id: i + 1,
+      text: q.text || '',
+      type,
+      topic: q.topic || topic || '',
+      options: opts,
+      answer: q.answer ?? q.numericAnswer ?? null,
+      sourceText: q.sourceText || '',
+      imageUrl: q.imageUrl || '',
+      audioUrl: q.audioUrl || '',
+      unit: q.unit || '',
+      numericAnswer: q.numericAnswer ?? (type === 'grid' ? q.answer : null)
+    };
+  });
+};
+
+/** AI анализ — ангийн сул тал + зөвлөмж */
+const analyzeExamWithAI = async ({ apiKey, exam, subs }) => {
+  const topicStats = {};
+  const variants = normalizeVariants(exam);
+  const allQs = variants.flatMap(v => v.questions || []);
+  const qById = {};
+  allQs.forEach(q => { qById[q.id] = q; });
+
+  subs.forEach(s => {
+    const ans = s.answers || {};
+    Object.keys(ans).forEach(qid => {
+      const q = qById[qid] || allQs[parseInt(qid, 10) - 1];
+      if (!q) return;
+      const topic = q.topic || (q.text || '').slice(0, 40) || ('Асуулт ' + qid);
+      if (!topicStats[topic]) topicStats[topic] = { total: 0, wrong: 0 };
+      topicStats[topic].total++;
+      if (!answersEqual(ans[qid], q.answer, q.type)) topicStats[topic].wrong++;
+    });
+  });
+
+  // Also score-based fallback bars by subject label pieces
+  const bars = Object.entries(topicStats).map(([topic, st]) => ({
+    topic,
+    pct: st.total ? Math.round(((st.total - st.wrong) / st.total) * 100) : 0,
+    wrongPct: st.total ? Math.round((st.wrong / st.total) * 100) : 0,
+    total: st.total
+  })).sort((a, b) => b.wrongPct - a.wrongPct);
+
+  // If no per-question data, use score distribution as bars
+  let chartBars = bars.slice(0, 8);
+  if (!chartBars.length && subs.length) {
+    const avg = Math.round(subs.reduce((a, s) => a + (s.score || 0), 0) / subs.length);
+    chartBars = [
+      { topic: exam.subject || 'Нийт', pct: avg, wrongPct: 100 - avg, total: subs.length }
+    ];
+  }
+
+  const weakest = chartBars[0];
+  let advice = weakest
+    ? `Сурагчдын ${weakest.wrongPct}% нь "${weakest.topic}" сэдвийг буруу хариулсан. Тус сэдвийг дахин давтана уу.`
+    : 'Хангалттай өгөгдөл байхгүй байна.';
+
+  if (apiKey && chartBars.length) {
+    try {
+      const sys = `You are an education analyst for Mongolian teachers. Reply in Mongolian. Give 2-4 short sentences of advice. No markdown.`;
+      const user = `Exam: ${exam.title} (${exam.subject}). Students: ${subs.length}. Weak topics JSON: ${JSON.stringify(chartBars.slice(0, 5))}. Average score: ${subs.length ? Math.round(subs.reduce((a,s)=>a+(s.score||0),0)/subs.length) : 0}%. Write teacher advice focusing on the weakest topic, recommend review.`;
+      const aiText = await groqChat(apiKey, sys, user, 512);
+      if (aiText) advice = aiText;
+    } catch (_) { /* keep heuristic advice */ }
+  }
+
+  return { advice, bars: chartBars, weakest };
+};
+
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
 function Topbar({ userName, role, onHome, onSettings }) {
   return (
@@ -1676,7 +2290,7 @@ function LandingPage({ onSelect }) {
         <h1 className="landing-title">SmartEXAM</h1>
         <div className="landing-sub">Ухаалаг Шалгалтын Систем</div>
         <p className="landing-desc" style={{margin:'8px auto 0'}}>
-          AI-д суурилсан тест зохиох, шалгалт авах, дүн дүгнэх иж бүрэн платформ
+          6 хичээлийн OMR · AI асуулт үүсгэгч · OpenCV сканер · AI сул талын анализ
         </p>
       </div>
       <div className="role-cards">
@@ -1698,16 +2312,54 @@ function LandingPage({ onSelect }) {
   );
 }
 
-// ─── TEACHER LOGIN ─────────────────────────────────────────────────────────────
+// ─── TEACHER LOGIN (Firebase Auth) ───────────────────────────────────────────
 function TeacherLogin({ onLogin }) {
+  const [mode, setMode] = useState('login'); // login | register
   const [name, setName] = useState('');
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('se_apikey') || '');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [apiKey, setApiKey] = useState(() => {
+    try { return sessionStorage.getItem('se_apikey') || localStorage.getItem('se_apikey') || ''; } catch { return ''; }
+  });
   const [showKey, setShowKey] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
 
-  const handle = () => {
-    if (!name.trim()) return;
-    if (apiKey) localStorage.setItem('se_apikey', apiKey);
-    onLogin(name.trim(), apiKey.trim());
+  const handle = async () => {
+    setErr('');
+    if (!email.trim() || !password) { setErr('Имэйл болон нууц үг оруулна уу'); return; }
+    if (password.length < 6) { setErr('Нууц үг дор хаяж 6 тэмдэгт'); return; }
+    if (mode === 'register' && !name.trim()) { setErr('Нэрээ оруулна уу'); return; }
+    setBusy(true);
+    try {
+      let user;
+      if (mode === 'register') {
+        user = await teacherSignUp(email, password, name.trim());
+      } else {
+        user = await teacherSignIn(email, password);
+      }
+      if (apiKey) {
+        try { sessionStorage.setItem('se_apikey', apiKey); localStorage.removeItem('se_apikey'); } catch {}
+      }
+      const display = sanitizeText(user.displayName || name.trim() || email.split('@')[0], 80);
+      try {
+        localStorage.setItem(SE_TEACHER, display);
+        if (window.SESecurity) SESecurity.saveTeacherMeta({ uid: user.uid, email: user.email, displayName: display });
+      } catch {}
+      onLogin(display, (apiKey || '').trim(), user);
+    } catch (e) {
+      const code = e?.code || '';
+      if (code === 'auth/email-already-in-use') setErr('Энэ имэйл бүртгэлтэй байна — нэвтэрнэ үү');
+      else if (code === 'auth/invalid-email') setErr('Имэйл буруу байна');
+      else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') setErr('Имэйл эсвэл нууц үг буруу');
+      else if (code === 'auth/user-not-found') setErr('Бүртгэл олдсонгүй — эхлээд бүртгүүлнэ үү');
+      else if (code === 'auth/weak-password') setErr('Нууц үг хэт сул байна');
+      else if (code === 'auth/operation-not-allowed') setErr('Firebase Console-д Email/Password Auth идэвхжүүлнэ үү');
+      else setErr(e?.message || 'Нэвтрэхэд алдаа');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -1715,46 +2367,56 @@ function TeacherLogin({ onLogin }) {
       <div className="modal">
         <div className="modal-head">
           <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <span style={{fontSize:'1.4rem'}}>📝</span>
+            <span style={{fontSize:'1.4rem'}}>🔐</span>
             <div>
-              <div style={{fontFamily:'Outfit',fontWeight:800,fontSize:'1.1rem'}}>Багшийн нэвтрэлт</div>
-              <div style={{fontSize:'0.8rem',color:'var(--text2)'}}>SmartEXAM систем</div>
+              <div style={{fontFamily:'Outfit',fontWeight:800,fontSize:'1.1rem'}}>Багшийн аюулгүй нэвтрэлт</div>
+              <div style={{fontSize:'0.8rem',color:'var(--text2)'}}>Firebase Auth · email / нууц үг</div>
             </div>
           </div>
         </div>
         <div className="modal-body">
+          <div style={{display:'flex',gap:8,marginBottom:14}}>
+            <button type="button" className={'btn btn-sm' + (mode === 'login' ? ' btn-primary' : ' btn-outline')} onClick={() => setMode('login')}>Нэвтрэх</button>
+            <button type="button" className={'btn btn-sm' + (mode === 'register' ? ' btn-primary' : ' btn-outline')} onClick={() => setMode('register')}>Бүртгүүлэх</button>
+          </div>
+          {mode === 'register' && (
+            <div className="form-group">
+              <label className="form-label">Багшийн нэр</label>
+              <input className="form-input" placeholder="Таны нэр" value={name} onChange={e => setName(e.target.value)} autoFocus />
+            </div>
+          )}
           <div className="form-group">
-            <label className="form-label">Багшийн нэр</label>
-            <input
-              className="form-input"
-              placeholder="Таны нэр"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handle()}
-              autoFocus
-            />
+            <label className="form-label">Имэйл</label>
+            <input className="form-input" type="email" autoComplete="username" placeholder="bagsh@school.mn"
+              value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !busy && handle()} />
           </div>
           <div className="form-group">
-            <label className="form-label">Groq API түлхүүр <span style={{fontWeight:400,textTransform:'none'}}>(AI задлан шинжилгээнд шаардлагатай)</span></label>
+            <label className="form-label">Нууц үг</label>
             <div style={{display:'flex',gap:8}}>
-              <input
-                className="form-input"
-                type={showKey ? 'text' : 'password'}
-                placeholder="gsk_..."
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                style={{flex:1}}
-              />
-              <button className="btn btn-outline btn-sm" onClick={() => setShowKey(s => !s)} style={{flexShrink:0}}>
-                {showKey ? '🙈' : '👁'}
-              </button>
+              <input className="form-input" type={showPass ? 'text' : 'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !busy && handle()} style={{flex:1}} />
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowPass(s => !s)}>{showPass ? '🙈' : '👁'}</button>
             </div>
-            <div className="form-hint">API түлхүүргүйгээр тест гараар оруулах боломжтой</div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Groq API түлхүүр <span style={{fontWeight:400,textTransform:'none'}}>(сонголттой · session only)</span></label>
+            <div style={{display:'flex',gap:8}}>
+              <input className="form-input" type={showKey ? 'text' : 'password'} placeholder="gsk_..."
+                value={apiKey} onChange={e => setApiKey(e.target.value)} style={{flex:1}} />
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowKey(s => !s)}>{showKey ? '🙈' : '👁'}</button>
+            </div>
+            <div className="form-hint">API түлхүүр localStorage-д хадгалагдахгүй — зөвхөн энэ session</div>
+          </div>
+          {err && <div className="form-error">⚠ {err}</div>}
+          <div style={{marginTop:10,padding:'10px 12px',background:'var(--amber-light)',borderRadius:8,fontSize:'0.78rem',color:'#92400e',lineHeight:1.45}}>
+            🔒 Шалгалтын өрөө зөвхөн таны Firebase бүртгэлтэй холбогдоно. Сурагчид хариултын түлхүүрийг унших боломжгүй.
           </div>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-primary btn-lg" onClick={handle} disabled={!name.trim()}>
-            ▶ Нэвтрэх
+          <button className="btn btn-primary btn-lg" onClick={handle} disabled={busy}>
+            {busy ? '⏳ ...' : (mode === 'register' ? '✅ Бүртгүүлэх' : '▶ Нэвтрэх')}
           </button>
         </div>
       </div>
@@ -1822,7 +2484,6 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
   const [raw, setRaw] = useState('');
   const [parsing, setParsing] = useState(false);
   const [err, setErr] = useState('');
-
   const vLabel = currentVariantLabel || 'A';
 
   const doParse = async () => {
@@ -1834,8 +2495,7 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
       if (!Array.isArray(qs) || qs.length === 0) throw new Error('Асуулт илрэхгүй байна');
       onParsed(qs);
     } catch (e) {
-      const msg = e?.message || 'Тодорхойгүй алдаа';
-      setErr('Алдаа: ' + msg);
+      setErr('Алдаа: ' + (e?.message || 'Тодорхойгүй алдаа'));
     } finally {
       setParsing(false);
     }
@@ -1843,64 +2503,45 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
 
   return (
     <div>
-      {/* Variant context indicator */}
       <div className="version-indicator" style={{marginBottom:16}}>
         <div className="version-indicator-icon">{vLabel}</div>
         <div className="version-indicator-text">
-          <div className="version-indicator-label">Хувилбар {vLabel}-д асуулт оруулж байна</div>
-          <div className="version-indicator-sub">
-            {variantCount > 1 ? `${variantCount} хувилбарын ${vLabel} хувилбар — текст paste хийх эсвэл гараар оруулна уу` : 'Текст paste хийх эсвэл гараар оруулна уу'}
-          </div>
+          <div className="version-indicator-label">Хувилбар {vLabel} — текст paste</div>
+          <div className="version-indicator-sub">AI автоматаар стандарт формат руу хөрвүүлнэ</div>
         </div>
         {(variantCount || 1) < 5 && (
           <button className="btn btn-outline btn-sm" onClick={() => onVariantCountChange?.()} style={{flexShrink:0}}>
-            ➕ Хувилбар нэмэх ({variantCount || 1}/5)
+            ➕ Хувилбар ({variantCount || 1}/5)
           </button>
         )}
       </div>
-
       <div className="ai-hint-box">
         <div className="ai-icon">✨</div>
         <div className="ai-hint-text">
-          <strong>AI автомат задлан шинжилгээ</strong> — Хувилбар {vLabel}<br/>
-          Тестийн текстийг доорх талбарт paste хийнэ үү. Ямар ч формат болно —
-          нэг мөрт, markdown, дугаарлалттай, нэргүй. AI таны тестийг автоматаар стандарт формат руу хөрвүүлнэ.
+          <strong>AI задлан шинжилгээ</strong> — Тестийн текстийг paste хийнэ үү.
         </div>
       </div>
-
       {!apiKey && (
-        <div className="apikey-banner">
-          ⚠️ API түлхүүр оруулаагүй — AI задлан шинжилгээ ажиллахгүй.
-          <button className="btn btn-outline btn-sm" onClick={() => alert('Дээрх ⚙ Тохиргоо товчоор API key оруулна уу')}>Тохиргоо</button>
-        </div>
+        <div className="apikey-banner">⚠️ API түлхүүр оруулаагүй — AI ажиллахгүй.</div>
       )}
-
       {parsing ? (
         <div className="parsing-overlay">
           <div className="spinner"></div>
-          <div style={{fontFamily:'Outfit',fontWeight:700,fontSize:'1.1rem',marginBottom:8}}>AI задлан шинжилж байна... (Хувилбар {vLabel})</div>
-          <div style={{fontSize:'0.85rem',color:'var(--text2)'}}>Тестийн асуулт, хариултуудыг автоматаар таних</div>
+          <div style={{fontFamily:'Outfit',fontWeight:700}}>AI задлан шинжилж байна...</div>
         </div>
       ) : (
         <>
           <div className="form-group">
-            <label className="form-label">Хувилбар {vLabel} — Тестийн текст</label>
-            <textarea
-              className="form-textarea"
-              style={{minHeight:240,fontFamily:'monospace',fontSize:'0.82rem'}}
-              placeholder={`Хувилбар ${vLabel}-н тестийн текстийг энд paste хийнэ үү...\n\n1. The police ________ the thief...\n* A) catched\n* B) caught\n* C) caughted\n* D) had catch\n...`}
-              value={raw}
-              onChange={e => setRaw(e.target.value)}
-            />
+            <label className="form-label">Тестийн текст</label>
+            <textarea className="form-textarea" style={{minHeight:200,fontFamily:'monospace',fontSize:'0.82rem'}}
+              placeholder="Тестийн текстийг энд paste хийнэ үү..." value={raw} onChange={e => setRaw(e.target.value)} />
             {err && <div className="form-error">⚠ {err}</div>}
           </div>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}>
+          <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
             <button className="btn btn-outline" onClick={onBack}>← Буцах</button>
             <div style={{display:'flex',gap:10}}>
-              <button className="btn btn-outline" onClick={onManual}>✏ Гараар оруулах</button>
-              <button className="btn btn-violet" onClick={doParse} disabled={!raw.trim() || !apiKey}>
-                ✨ AI задлан шинжлэх (Хувилбар {vLabel})
-              </button>
+              <button className="btn btn-outline" onClick={onManual}>✏ Гараар</button>
+              <button className="btn btn-violet" onClick={doParse} disabled={!raw.trim() || !apiKey}>✨ AI задлах</button>
             </div>
           </div>
         </>
@@ -1909,8 +2550,90 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
   );
 }
 
+// ─── AI QUESTION GENERATOR ────────────────────────────────────────────────────
+function AIQuestionGenerator({ apiKey, subject, format, onGenerated, onBack }) {
+  const profile = getSubjectProfile(subject) || SUBJECT_PROFILES[0];
+  const allowedTypes = AI_Q_TYPES.filter(t => (profile.qTypes || ['mcq']).includes(t.id));
+  const [qType, setQType] = useState(allowedTypes[0]?.id || 'mcq');
+  const [topic, setTopic] = useState('');
+  const [count, setCount] = useState(5);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [preview, setPreview] = useState(null);
+
+  const doGenerate = async () => {
+    if (!topic.trim()) { setErr('Сэдэв оруулна уу'); return; }
+    if (!apiKey) { setErr('Groq API түлхүүр шаардлагатай'); return; }
+    setBusy(true); setErr(''); setPreview(null);
+    try {
+      const qs = await generateQuestionsWithAI({
+        apiKey, subject: profile.name, topic: topic.trim(), qType,
+        count: Math.min(20, Math.max(1, +count || 5)), format: format || 'mcq'
+      });
+      setPreview(qs);
+      onGenerated?.(qs);
+    } catch (e) {
+      setErr(e?.message || 'Алдаа');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="ai-hint-box">
+        <div className="ai-icon">🤖</div>
+        <div className="ai-hint-text">
+          <strong>AI Асуулт үүсгэгч</strong> — {profile.icon} {profile.name}<br/>
+          Сэдэв болон төрөл сонгоод ~1 сек-д JSON асуулт үүсгэнэ (Groq).
+        </div>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Асуултын төрөл</label>
+        <div className="ai-gen-types">
+          {allowedTypes.map(t => (
+            <button key={t.id} type="button" className={'ai-type-chip' + (qType === t.id ? ' selected' : '')}
+              onClick={() => setQType(t.id)}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Сэдэв</label>
+          <input className="form-input" placeholder="жн: Ионы холбоо, Simple Past..." value={topic}
+            onChange={e => setTopic(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Тоо</label>
+          <input className="form-input" type="number" min="1" max="20" value={count}
+            onChange={e => setCount(e.target.value)} />
+        </div>
+      </div>
+      {err && <div className="form-error" style={{marginBottom:10}}>⚠ {err}</div>}
+      {busy ? (
+        <div className="parsing-overlay">
+          <div className="spinner"></div>
+          <div style={{fontFamily:'Outfit',fontWeight:700}}>AI асуулт үүсгэж байна...</div>
+        </div>
+      ) : (
+        <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+          {onBack && <button className="btn btn-outline" onClick={onBack}>← Буцах</button>}
+          <button className="btn btn-violet btn-lg" onClick={doGenerate} disabled={!apiKey || !topic.trim()}>
+            ✨ Асуулт үүсгэх
+          </button>
+        </div>
+      )}
+      {preview && (
+        <div className="ai-success-banner">
+          ✅ {preview.length} асуулт амжилттай үүслээ — доор хянана уу
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── QUESTION EDITOR ──────────────────────────────────────────────────────────
-function QuestionEditor({ questions, onChange }) {
+function QuestionEditor({ questions, onChange, defaultType = 'mcq', subjectFeatures = [] }) {
   const setQ = (idx, field, val) => {
     const next = questions.map((q, i) => i === idx ? {...q, [field]: val} : q);
     onChange(next);
@@ -1918,63 +2641,127 @@ function QuestionEditor({ questions, onChange }) {
   const setOpt = (qi, oi, val) => {
     const next = questions.map((q, i) => {
       if (i !== qi) return q;
-      const opts = q.options.map((o, j) => j === oi ? {...o, text: val} : o);
+      const opts = (q.options || []).map((o, j) => j === oi ? {...o, text: val} : o);
       return {...q, options: opts};
+    });
+    onChange(next);
+  };
+  const changeType = (qi, type) => {
+    const next = questions.map((q, i) => {
+      if (i !== qi) return q;
+      return {
+        ...q,
+        type,
+        options: defaultOptionsForType(type),
+        answer: null,
+        numericAnswer: type === 'grid' ? (q.numericAnswer || '') : null
+      };
     });
     onChange(next);
   };
   const addQ = () => {
     onChange([...questions, {
-      id: questions.length + 1,
-      text: '',
-      options: [{key:'A',text:''},{key:'B',text:''},{key:'C',text:''},{key:'D',text:''}],
-      answer: null
+      ...seedQuestion(defaultType),
+      id: questions.length + 1
     }]);
   };
-  const removeQ = idx => onChange(questions.filter((_, i) => i !== idx));
+  const removeQ = idx => onChange(questions.filter((_, i) => i !== idx).map((q, i) => ({...q, id: i + 1})));
 
   return (
     <div>
-      {questions.map((q, qi) => (
-        <div className="question-item" key={qi} style={{marginBottom:16}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
-            <span className="q-num">#{q.id}</span>
-            <button className="btn btn-red btn-sm" onClick={() => removeQ(qi)}>✕ Устгах</button>
-          </div>
-          <textarea
-            className="form-textarea"
-            style={{minHeight:60,fontSize:'0.875rem',marginBottom:10}}
-            placeholder="Асуултын текст..."
-            value={q.text}
-            onChange={e => setQ(qi, 'text', e.target.value)}
-          />
-          <div className="options-grid" style={{marginBottom:10}}>
-            {q.options.map((opt, oi) => (
-              <div key={opt.key} style={{display:'flex',gap:7,alignItems:'center'}}>
-                <div className="option-key" style={{background: q.answer===opt.key ? 'var(--green)' : undefined, color: q.answer===opt.key ? 'white' : undefined, border: q.answer===opt.key ? '1.5px solid var(--green)' : undefined}}>{opt.key}</div>
-                <input
-                  className="form-input"
-                  style={{flex:1,padding:'6px 10px',fontSize:'0.82rem'}}
-                  placeholder={`${opt.key} хариулт...`}
-                  value={opt.text}
-                  onChange={e => setOpt(qi, oi, e.target.value)}
-                />
+      {questions.map((q, qi) => {
+        const type = q.type || defaultType || 'mcq';
+        return (
+          <div className="question-item" key={qi} style={{marginBottom:16}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8,gap:8,flexWrap:'wrap'}}>
+              <span className="q-num">#{q.id}</span>
+              <select className="form-select" style={{width:'auto',padding:'4px 10px',fontSize:'0.8rem'}}
+                value={type} onChange={e => changeType(qi, e.target.value)}>
+                <option value="mcq">A–D сонголт</option>
+                <option value="tf">Зөв / Буруу</option>
+                <option value="grid">Grid-in (тоон)</option>
+                <option value="blank">Сул орон</option>
+              </select>
+              <button className="btn btn-red btn-sm" onClick={() => removeQ(qi)}>✕ Устгах</button>
+            </div>
+            {(subjectFeatures.includes('source') || type === 'tf') && (
+              <div className="form-group">
+                <label className="form-label">Эх текст / Сурвалж</label>
+                <textarea className="form-textarea" style={{minHeight:60,fontSize:'0.85rem'}}
+                  placeholder="Эх текст..." value={q.sourceText || ''} onChange={e => setQ(qi, 'sourceText', e.target.value)} />
               </div>
-            ))}
+            )}
+            {subjectFeatures.includes('image') && (
+              <div className="form-group">
+                <label className="form-label">Зураг URL (сонголттой)</label>
+                <input className="form-input" placeholder="https://..." value={q.imageUrl || ''}
+                  onChange={e => setQ(qi, 'imageUrl', e.target.value)} />
+              </div>
+            )}
+            {subjectFeatures.includes('audio') && (
+              <div className="form-group">
+                <label className="form-label">Аудио URL (сонсгол)</label>
+                <input className="form-input" placeholder="https://...mp3" value={q.audioUrl || ''}
+                  onChange={e => setQ(qi, 'audioUrl', e.target.value)} />
+              </div>
+            )}
+            <div className="form-row" style={{marginBottom:8}}>
+              <div className="form-group" style={{marginBottom:0}}>
+                <label className="form-label">Сэдэв (анализд)</label>
+                <input className="form-input" placeholder="жн: Ионы холбоо" value={q.topic || ''}
+                  onChange={e => setQ(qi, 'topic', e.target.value)} />
+              </div>
+              {subjectFeatures.includes('unit') && (
+                <div className="form-group" style={{marginBottom:0}}>
+                  <label className="form-label">Нэгж</label>
+                  <input className="form-input" placeholder="жн: N, m/s²" value={q.unit || ''}
+                    onChange={e => setQ(qi, 'unit', e.target.value)} />
+                </div>
+              )}
+            </div>
+            <textarea className="form-textarea" style={{minHeight:60,fontSize:'0.875rem',marginBottom:10}}
+              placeholder="Асуултын текст..." value={q.text} onChange={e => setQ(qi, 'text', e.target.value)} />
+
+            {type === 'grid' ? (
+              <div style={{marginBottom:10}}>
+                <label className="form-label">Зөв хариу (3 оронтой тоо)</label>
+                <input className="form-input" style={{maxWidth:160}} maxLength={3} placeholder="115"
+                  value={q.numericAnswer || q.answer || ''}
+                  onChange={e => {
+                    const v = e.target.value.replace(/\D/g, '').slice(0, 3);
+                    const next = questions.map((qq, i) => i === qi ? {...qq, numericAnswer: v, answer: v} : qq);
+                    onChange(next);
+                  }} />
+                {q.unit && <span style={{marginLeft:8,color:'var(--text2)',fontWeight:600}}>{q.unit}</span>}
+              </div>
+            ) : (
+              <>
+                <div className="options-grid" style={{marginBottom:10}}>
+                  {(q.options || []).map((opt, oi) => (
+                    <div key={opt.key} style={{display:'flex',gap:7,alignItems:'center'}}>
+                      <div className="option-key" style={{
+                        background: q.answer===opt.key ? 'var(--green)' : undefined,
+                        color: q.answer===opt.key ? 'white' : undefined,
+                        border: q.answer===opt.key ? '1.5px solid var(--green)' : undefined
+                      }}>{opt.key}</div>
+                      <input className="form-input" style={{flex:1,padding:'6px 10px',fontSize:'0.82rem'}}
+                        placeholder={opt.key + ' хариулт...'} value={opt.text}
+                        onChange={e => setOpt(qi, oi, e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+                <div className="answer-select-row">
+                  <span className="answer-label">Зөв хариулт:</span>
+                  {(q.options || []).map(opt => (
+                    <button key={opt.key} className={'ans-btn' + (q.answer === opt.key ? ' selected' : '')}
+                      onClick={() => setQ(qi, 'answer', q.answer === opt.key ? null : opt.key)}>{opt.key}</button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-          <div className="answer-select-row">
-            <span className="answer-label">Зөв хариулт:</span>
-            {q.options.map(opt => (
-              <button
-                key={opt.key}
-                className={`ans-btn ${q.answer === opt.key ? 'selected' : ''}`}
-                onClick={() => setQ(qi, 'answer', q.answer === opt.key ? null : opt.key)}
-              >{opt.key}</button>
-            ))}
-            {!q.answer && <span style={{fontSize:'0.75rem',color:'var(--text3)',marginLeft:6}}>— оноогүй</span>}
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <button className="btn btn-outline" style={{width:'100%',justifyContent:'center',padding:'11px'}} onClick={addQ}>
         + Асуулт нэмэх
       </button>
@@ -1982,76 +2769,81 @@ function QuestionEditor({ questions, onChange }) {
   );
 }
 
-// ─── CREATE EXAM ──────────────────────────────────────────────────────────────
+// ─── CREATE EXAM (3-step wizard) ──────────────────────────────────────────────
 function CreateExam({ apiKey, onSave, onCancel }) {
-  const [step, setStep] = useState(1); // 1=info, 2=parse, 3=review
-  const [info, setInfo] = useState({ title: '', subject: 'Англи хэл', duration: 45, passingScore: 60 });
+  const [step, setStep] = useState(1);
+  const [info, setInfo] = useState({
+    title: '', subject: '', subjectId: '', duration: 45, passingScore: 60,
+    omrFormat: 'mcq', omrMode: 'mcq'
+  });
   const [variants, setVariants] = useState([{ label: 'A', questions: [] }]);
   const [activeVar, setActiveVar] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [step3Mode, setStep3Mode] = useState('ai');
   const [showInlineAI, setShowInlineAI] = useState(false);
   const [inlineRaw, setInlineRaw] = useState('');
   const [inlineParsing, setInlineParsing] = useState(false);
   const [inlineErr, setInlineErr] = useState('');
   const variantCount = variants.length;
+  const profile = getSubjectProfile(info.subjectId || info.subject);
+  const stepLabels = ['Хичээл сонгох', 'Формат & загвар', 'Асуулт үүсгэх'];
 
-  const stepLabels = ['Мэдээлэл', 'Тест оруулах', 'Хянах & нийтлэх'];
+  const selectSubject = (p) => {
+    setInfo(prev => ({
+      ...prev,
+      subject: p.name,
+      subjectId: p.id,
+      omrFormat: p.formats[0]?.id || 'mcq',
+      omrMode: p.omrMode || 'mcq'
+    }));
+  };
 
   const handleParsed = qs => {
     setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v));
-    setStep(3);
+    setStep3Mode('manual');
+  };
+
+  const handleGenerated = qs => {
+    setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v));
+    setStep3Mode('manual');
   };
 
   const handleManual = () => {
-    const seed = [{id:1,text:'',options:[{key:'A',text:''},{key:'B',text:''},{key:'C',text:''},{key:'D',text:''}],answer:null}];
-    setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: seed}) : v));
-    setStep(3);
+    const type = info.omrFormat === 'tf' ? 'tf' : info.omrFormat === 'grid' ? 'grid' : 'mcq';
+    setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: [seedQuestion(type)]}) : v));
+    setStep3Mode('manual');
   };
 
   const addVariant = () => {
     setVariants(prev => {
-      const nextIdx = prev.length;
-      if (nextIdx >= 5) return prev;
-      return [...prev, { label: alpha(nextIdx), questions: [] }];
+      if (prev.length >= 5) return prev;
+      return [...prev, { label: alpha(prev.length), questions: [] }];
     });
     setActiveVar(v => Math.min(v + 1, 4));
   };
 
-  // Go to next variant (create if needed), hide current questions
   const goNextVariant = () => {
     const nextIdx = activeVar + 1;
     if (nextIdx >= 5) return;
     setVariants(prev => {
-      const cleared = prev.map((v, idx) =>
-        idx === activeVar ? { ...v, questions: [] } : v
-      );
-      if (nextIdx >= cleared.length) {
-        return [...cleared, { label: alpha(nextIdx), questions: [] }];
-      }
-      return cleared.map((v, idx) =>
-        idx === nextIdx ? { ...v, questions: [] } : v
-      );
+      const cleared = prev.map((v, idx) => idx === activeVar ? { ...v, questions: [] } : v);
+      if (nextIdx >= cleared.length) return [...cleared, { label: alpha(nextIdx), questions: [] }];
+      return cleared.map((v, idx) => idx === nextIdx ? { ...v, questions: [] } : v);
     });
     setActiveVar(nextIdx);
-    setShowInlineAI(false);
-    setInlineRaw('');
-    setInlineErr('');
+    setStep3Mode('ai');
   };
 
-  // Inline AI parse for current variant (in step 3)
   const doInlineParse = async () => {
-    if (!inlineRaw.trim()) return;
-    if (!apiKey) { setInlineErr('API түлхүүр байхгүй'); return; }
+    if (!inlineRaw.trim() || !apiKey) return;
     setInlineParsing(true); setInlineErr('');
     try {
       const qs = await parseTestWithAI(inlineRaw, apiKey);
-      if (!Array.isArray(qs) || qs.length === 0) throw new Error('Асуулт илрэхгүй байна');
+      if (!Array.isArray(qs) || !qs.length) throw new Error('Асуулт илрэхгүй');
       setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v));
-      setShowInlineAI(false);
-      setInlineRaw('');
+      setShowInlineAI(false); setInlineRaw('');
     } catch (e) {
-      const msg = e?.message || 'Тодорхойгүй алдаа';
-      setInlineErr('Алдаа: ' + msg);
+      setInlineErr(e?.message || 'Алдаа');
     } finally {
       setInlineParsing(false);
     }
@@ -2060,59 +2852,84 @@ function CreateExam({ apiKey, onSave, onCancel }) {
   const handlePublish = () => {
     const hasAny = variants.some(v => (v.questions || []).some(q => (q.text || '').trim()));
     if (!hasAny) { alert('Дор хаяж нэг асуулт оруулна уу'); return; }
+    if (!info.title.trim()) { alert('Шалгалтын нэр оруулна уу'); return; }
     setSaving(true);
-    setTimeout(() => {
-      const normalizedVariants = variants.map((v, vidx) => {
-        const valid = (v.questions || []).filter(q => (q.text || '').trim());
-        const normalizedQs = valid.map((q, i) => ({...q, id: i + 1}));
-        return { label: v.label || alpha(vidx), questions: normalizedQs };
-      }).filter(v => v.questions.length > 0);
-      const exam = {
-        id: uid(),
-        ...info,
-        variants: normalizedVariants.length ? normalizedVariants : [{ label: 'A', questions: [] }],
-        createdAt: new Date().toISOString(),
-        published: true,
-        submissionCount: 0
-      };
-
-      // Publish room to Firebase (activeRooms/{roomID})
-      const db = getDb();
-      if (db) {
-        try {
+    setTimeout(async () => {
+      try {
+        const teacher = ensureTeacherAuth();
+        if (!teacher) {
+          alert('Нэвтэрсэн багш олдсонгүй. Дахин нэвтэрнэ үү.');
+          setSaving(false);
+          return;
+        }
+        const normalizedVariants = variants.map((v, vidx) => {
+          const valid = (v.questions || []).filter(q => (q.text || '').trim());
+          return { label: v.label || alpha(vidx), questions: valid.map((q, i) => ({...q, id: i + 1})) };
+        }).filter(v => v.questions.length > 0);
+        const examId = uid();
+        const exam = {
+          id: examId,
+          title: sanitizeText(info.title, 200),
+          subject: sanitizeText(info.subject, 100),
+          subjectId: info.subjectId,
+          duration: info.duration,
+          passingScore: info.passingScore,
+          omrFormat: info.omrFormat,
+          omrMode: info.omrMode || profile?.omrMode || 'mcq',
+          ownerUid: teacher.uid,
+          variants: normalizedVariants.length ? normalizedVariants : [{ label: 'A', questions: [] }],
+          createdAt: new Date().toISOString(),
+          published: true,
+          submissionCount: 0
+        };
+        const db = getDb();
+        if (db) {
           const versions = {};
-          exam.variants.forEach((v) => { versions[v.label] = packQuestions(v.questions); });
-          roomRef(db, exam.id).set({
+          const answerKeys = {};
+          exam.variants.forEach((v) => {
+            versions[v.label] = packQuestions(v.questions);
+            answerKeys[v.label] = packAnswerKeys(v.questions);
+          });
+          await roomRef(db, exam.id).set({
             roomID: exam.id,
             title: exam.title,
             subject: exam.subject,
+            subjectId: exam.subjectId,
             duration: exam.duration,
             passingScore: exam.passingScore,
+            omrFormat: exam.omrFormat,
+            omrMode: exam.omrMode,
+            ownerUid: teacher.uid,
+            publicReadable: true,
             createdAt: exam.createdAt,
-            versions
+            versions,
+            answerKeys
           });
-        } catch {}
+        }
+        onSave(exam);
+      } catch (e) {
+        alert('Нийтлэхэд алдаа: ' + (e?.message || e) + '\n\nFirebase Auth нэвтэрсэн эсэх болон database rules deploy хийсэн эсэхийг шалгана уу.');
+        setSaving(false);
       }
-
-      onSave(exam);
-    }, 300);
+    }, 100);
   };
 
   const currentVariant = variants[activeVar] || { label: alpha(activeVar), questions: [] };
   const currentQCount = (currentVariant.questions || []).filter(q => q.text).length;
   const totalQCount = variants.reduce((sum, v) => sum + (v.questions||[]).filter(q=>q.text).length, 0);
+  const formats = profile?.formats || [{ id: 'mcq', label: 'A–D', desc: 'Стандарт' }];
 
   return (
     <div>
       <div className="page-header">
-        <h2 className="page-title">✏ Шинэ тест үүсгэх</h2>
+        <h2 className="page-title">✏ Шалгалт үүсгэх</h2>
+        <div className="page-sub">3 алхамт мастер · хичээлийн тусгай OMR формат</div>
       </div>
 
-      {/* Steps */}
       <div className="steps mb-4">
         {stepLabels.map((lbl, i) => (
           <React.Fragment key={i}>
-            <div className={`step ${step === i+1 ? 'active' : step > i+1 ? 'done' : ''}`}>
+            <div className={'step' + (step === i+1 ? ' active' : step > i+1 ? ' done' : '')}>
               <div className="step-num">{step > i+1 ? '✓' : i+1}</div>
               <span>{lbl}</span>
             </div>
@@ -2125,187 +2942,191 @@ function CreateExam({ apiKey, onSave, onCancel }) {
         <div className="card-body">
           {step === 1 && (
             <div>
+              <label className="form-label" style={{marginBottom:12}}>Хичээл сонгох</label>
+              <div className="subject-grid">
+                {SUBJECT_PROFILES.map(p => (
+                  <button key={p.id} type="button"
+                    className={'subject-card' + (info.subjectId === p.id ? ' selected' : '')}
+                    style={{ '--subject-color': p.color }}
+                    onClick={() => selectSubject(p)}>
+                    <div className="subject-card-icon">{p.icon}</div>
+                    {p.name}
+                    <div className="subject-card-fmt">{p.formats[0]?.label}</div>
+                  </button>
+                ))}
+              </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Шалгалтын нэр</label>
-                  <input className="form-input" placeholder="жн: Simple Past Tense" value={info.title} onChange={e => setInfo(p => ({...p, title: e.target.value}))} />
+                  <input className="form-input" placeholder="жн: Ионы холбоо — Улирлын шалгалт"
+                    value={info.title} onChange={e => setInfo(p => ({...p, title: e.target.value}))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Хичээл</label>
-                  <input className="form-input" placeholder="жн: Англи хэл" value={info.subject} onChange={e => setInfo(p => ({...p, subject: e.target.value}))} />
+                  <label className="form-label">Хугацаа (мин)</label>
+                  <input className="form-input" type="number" min="5" max="180" value={info.duration}
+                    onChange={e => setInfo(p => ({...p, duration: +e.target.value}))} />
                 </div>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Хугацаа (минут)</label>
-                  <input className="form-input" type="number" min="5" max="180" value={info.duration} onChange={e => setInfo(p => ({...p, duration: +e.target.value}))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Тэнцэх онооны босго (%)</label>
-                  <input className="form-input" type="number" min="0" max="100" value={info.passingScore} onChange={e => setInfo(p => ({...p, passingScore: +e.target.value}))} />
-                </div>
-              </div>
-              <div style={{background:'var(--violet-light)',border:'1.5px solid #ddd6fe',borderRadius:10,padding:'12px 16px',marginBottom:16,fontSize:'0.83rem',color:'#5b21b6'}}>
-                🎯 <strong>Олон хувилбарт шалгалт</strong> — Дараагийн алхамд хувилбар бүрт (A, B, C...) тусдаа асуулт оруулах боломжтой.
-                Сурагч бүрд систем санамсаргүйгээр нэг хувилбар онооно.
+              <div className="form-group">
+                <label className="form-label">Тэнцэх босго (%)</label>
+                <input className="form-input" type="number" min="0" max="100" style={{maxWidth:160}}
+                  value={info.passingScore}
+                  onChange={e => setInfo(p => ({...p, passingScore: +e.target.value}))} />
               </div>
               <div style={{display:'flex',justifyContent:'space-between',marginTop:8}}>
                 <button className="btn btn-outline" onClick={onCancel}>Болих</button>
-                <button className="btn btn-primary" onClick={() => setStep(2)} disabled={!info.title.trim()}>Дараах →</button>
+                <button className="btn btn-primary" onClick={() => setStep(2)}
+                  disabled={!info.subjectId || !info.title.trim()}>Дараах →</button>
               </div>
             </div>
           )}
 
           {step === 2 && (
-            <AIParseStep
-              apiKey={apiKey}
-              onParsed={handleParsed}
-              onManual={handleManual}
-              onBack={() => setStep(1)}
-              variantCount={variantCount}
-              onVariantCountChange={addVariant}
-              currentVariantLabel={currentVariant.label || alpha(activeVar)}
-            />
+            <div>
+              <div style={{marginBottom:16,display:'flex',alignItems:'center',gap:10}}>
+                <span style={{fontSize:'1.5rem'}}>{profile?.icon}</span>
+                <div>
+                  <div style={{fontFamily:'Outfit',fontWeight:800}}>{info.subject}</div>
+                  <div style={{fontSize:'0.8rem',color:'var(--text2)'}}>OMR загвар болон тестийн формат</div>
+                </div>
+              </div>
+              <label className="form-label">Формат сонгох</label>
+              <div className="format-grid">
+                {formats.map(f => (
+                  <button key={f.id} type="button"
+                    className={'format-card' + (info.omrFormat === f.id ? ' selected' : '')}
+                    onClick={() => setInfo(p => ({
+                      ...p,
+                      omrFormat: f.id,
+                      omrMode: f.id === 'tf' ? 'tf' : f.id === 'grid' ? 'grid' : (profile?.omrMode || 'mcq')
+                    }))}>
+                    <div className="format-card-title">{f.label}</div>
+                    <div className="format-card-desc">{f.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{background:'var(--surface2)',borderRadius:12,padding:16,border:'1px solid var(--border)',marginBottom:16}}>
+                <div style={{fontWeight:700,marginBottom:8,fontSize:'0.85rem'}}>📋 OMR хуудасны урьдчилсан харагдац</div>
+                <div style={{fontSize:'0.82rem',color:'var(--text2)',lineHeight:1.6}}>
+                  {info.omrFormat === 'tf' && '• Эх текст хэсэг + «Зөв/Үнэн» | «Буруу/Худал» pill хэлбэрийн дугуй'}
+                  {info.omrFormat === 'grid' && '• A–D эсвэл 3 баганат 0–9 Grid-in тоон хариу'}
+                  {(info.omrFormat === 'mcq' || info.omrFormat === 'blank') && '• Стандарт A B C D дугуй · зураг/аудио дижитал шалгалтад'}
+                  <br/>• 4 өнцгийн хар маркер (Finder) — OpenCV warpPerspective
+                </div>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between'}}>
+                <button className="btn btn-outline" onClick={() => setStep(1)}>← Буцах</button>
+                <button className="btn btn-primary" onClick={() => setStep(3)}>Дараах →</button>
+              </div>
+            </div>
           )}
 
           {step === 3 && (
             <div>
-              {/* ─── PROMINENT VERSION INDICATOR ─── */}
-              <div className="version-indicator">
-                <div className="version-indicator-icon">{currentVariant.label || alpha(activeVar)}</div>
-                <div className="version-indicator-text">
-                  <div className="version-indicator-label">
-                    Одоо Хувилбар {currentVariant.label || alpha(activeVar)}-г бөглөж байна
-                  </div>
-                  <div className="version-indicator-sub">
-                    {activeVar + 1}/{variantCount} хувилбар &nbsp;·&nbsp;
-                    {currentQCount} асуулт оруулсан &nbsp;·&nbsp;
-                    Нийт {totalQCount} асуулт ({variants.length} хувилбар)
-                  </div>
-                </div>
-                <div style={{display:'flex',gap:8,flexShrink:0}}>
-                  {!showInlineAI && apiKey && (
-                    <button className="btn btn-outline btn-sm" onClick={() => setShowInlineAI(true)} title="AI-аар энэ хувилбарын асуулт үүсгэх">
-                      ✨ AI
-                    </button>
-                  )}
-                  {activeVar < variantCount - 1 ? (
-                    <button className="btn btn-sm" style={{background:'var(--violet)',color:'white'}} onClick={() => setActiveVar(activeVar + 1)}>
-                      {alpha(activeVar + 1)} хувилбар →
-                    </button>
-                  ) : variantCount < 5 ? (
-                    <button className="version-next-btn btn-sm" onClick={goNextVariant}>
-                      ➕ Дараагийн хувилбар
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* ─── VARIANT TAB STRIP ─── */}
-              <div className="version-tab-strip">
-                <span style={{fontSize:'0.75rem',fontWeight:700,color:'var(--text3)',alignSelf:'center',marginRight:4}}>ХУВИЛБАР:</span>
-                {variants.map((v, idx) => (
-                  <button
-                    key={idx}
-                    className={`version-tab ${idx === activeVar ? 'active' : ''}`}
-                    onClick={() => { setActiveVar(idx); setShowInlineAI(false); setInlineRaw(''); setInlineErr(''); }}
-                  >
-                    {v.label || alpha(idx)}
-                    <span className="vtab-count">{(v.questions||[]).filter(q=>q.text).length}</span>
-                  </button>
+              <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+                {[
+                  ['ai', '🤖 AI үүсгэх'],
+                  ['parse', '✨ Текст задлах'],
+                  ['manual', '✏ Гараар / Хянах']
+                ].map(([id, lbl]) => (
+                  <button key={id} className={'btn btn-sm' + (step3Mode === id ? ' btn-violet' : ' btn-outline')}
+                    onClick={() => setStep3Mode(id)}>{lbl}</button>
                 ))}
-                {variantCount < 5 && (
-                  <button
-                    style={{padding:'5px 12px',borderRadius:20,border:'1.5px dashed var(--border)',background:'transparent',color:'var(--text3)',fontSize:'0.78rem',cursor:'pointer',fontWeight:600}}
-                    onClick={addVariant}
-                    title="Хувилбар нэмэх"
-                  >
-                    ➕ нэмэх
-                  </button>
-                )}
-                <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
-                  <button className="btn btn-outline btn-sm" onClick={() => setStep(2)}>← AI задлах</button>
-                  <button className="btn btn-green btn-sm" onClick={handlePublish} disabled={saving}>
-                    {saving ? '⏳ ...' : '🚀 Нийтлэх'}
-                  </button>
-                </div>
               </div>
 
-              {/* ─── INLINE AI PARSE PANEL ─── */}
-              {showInlineAI && (
-                <div className="inline-ai-panel">
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-                    <div style={{fontFamily:'Outfit',fontWeight:700,fontSize:'0.95rem',color:'#4c1d95'}}>
-                      ✨ AI задлан шинжлэх — Хувилбар {currentVariant.label || alpha(activeVar)}
-                    </div>
-                    <button className="btn btn-ghost btn-sm" onClick={() => { setShowInlineAI(false); setInlineRaw(''); setInlineErr(''); }}>✕</button>
-                  </div>
-                  {inlineParsing ? (
-                    <div style={{textAlign:'center',padding:'24px 0'}}>
-                      <div className="spinner" style={{margin:'0 auto 12px'}} />
-                      <div style={{color:'var(--violet)',fontWeight:600}}>Хувилбар {currentVariant.label || alpha(activeVar)}-н асуулт задлан шинжилж байна...</div>
-                    </div>
-                  ) : (
-                    <>
-                      <textarea
-                        className="form-textarea"
-                        style={{minHeight:160,fontFamily:'monospace',fontSize:'0.82rem',marginBottom:10}}
-                        placeholder={`Хувилбар ${currentVariant.label || alpha(activeVar)}-н тестийн текстийг paste хийнэ үү...`}
-                        value={inlineRaw}
-                        onChange={e => setInlineRaw(e.target.value)}
-                      />
-                      {inlineErr && <div className="form-error" style={{marginBottom:8}}>⚠ {inlineErr}</div>}
-                      <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-                        <button className="btn btn-outline btn-sm" onClick={() => { setShowInlineAI(false); setInlineRaw(''); setInlineErr(''); }}>Болих</button>
-                        <button className="btn btn-violet btn-sm" onClick={doInlineParse} disabled={!inlineRaw.trim() || !apiKey}>
-                          ✨ Задлан шинжлэх
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+              {step3Mode === 'ai' && (
+                <AIQuestionGenerator
+                  apiKey={apiKey}
+                  subject={info.subject}
+                  format={info.omrFormat}
+                  onGenerated={handleGenerated}
+                  onBack={() => setStep(2)}
+                />
               )}
 
-              {/* ─── QUESTION EDITOR FOR CURRENT VARIANT ─── */}
-              <div style={{marginBottom:12,padding:'8px 12px',background:'var(--surface2)',borderRadius:'var(--radius-sm)',fontSize:'0.8rem',color:'var(--text2)',border:'1px solid var(--border)'}}>
-                ✏ <strong style={{color:'var(--text)'}}>Хувилбар {currentVariant.label || alpha(activeVar)}</strong>-н асуултуудыг доор засна уу.
-                {variantCount > 1 && <span style={{marginLeft:8}}>Бусад хувилбарын асуулт харагдахгүй — дээрх табаас сонгоно.</span>}
-              </div>
-              <QuestionEditor
-                questions={currentVariant.questions || []}
-                onChange={(qs) => setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v))}
-              />
+              {step3Mode === 'parse' && (
+                <AIParseStep
+                  apiKey={apiKey}
+                  onParsed={handleParsed}
+                  onManual={handleManual}
+                  onBack={() => setStep(2)}
+                  variantCount={variantCount}
+                  onVariantCountChange={addVariant}
+                  currentVariantLabel={currentVariant.label || alpha(activeVar)}
+                />
+              )}
 
-              {/* ─── BOTTOM NAV ─── */}
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:16,paddingTop:16,borderTop:'1px solid var(--border)'}}>
-                <div style={{fontSize:'0.82rem',color:'var(--text2)'}}>
-                  {variants.map((v,idx) => (
-                    <span key={idx} style={{marginRight:12,fontWeight: idx===activeVar ? 700 : 400, color: idx===activeVar ? 'var(--violet)' : 'var(--text3)'}}>
-                      {v.label||alpha(idx)}: {(v.questions||[]).filter(q=>q.text).length}асуулт
-                    </span>
-                  ))}
-                </div>
-                <div style={{display:'flex',gap:10}}>
-                  {activeVar > 0 && (
-                    <button className="btn btn-outline btn-sm" onClick={() => setActiveVar(activeVar - 1)}>
-                      ← {alpha(activeVar - 1)} хувилбар
-                    </button>
+              {step3Mode === 'manual' && (
+                <div>
+                  <div className="version-indicator">
+                    <div className="version-indicator-icon">{currentVariant.label || alpha(activeVar)}</div>
+                    <div className="version-indicator-text">
+                      <div className="version-indicator-label">Хувилбар {currentVariant.label || alpha(activeVar)}</div>
+                      <div className="version-indicator-sub">
+                        {currentQCount} асуулт · Нийт {totalQCount} · {info.subject} · {info.omrFormat}
+                      </div>
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      {apiKey && (
+                        <button className="btn btn-outline btn-sm" onClick={() => setShowInlineAI(s => !s)}>✨ AI</button>
+                      )}
+                      {variantCount < 5 && (
+                        <button className="btn btn-sm" style={{background:'var(--violet)',color:'white'}} onClick={goNextVariant}>
+                          ➕ Хувилбар
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="version-tab-strip">
+                    {variants.map((v, idx) => (
+                      <button key={idx} className={'version-tab' + (idx === activeVar ? ' active' : '')}
+                        onClick={() => setActiveVar(idx)}>
+                        {v.label || alpha(idx)}
+                        <span className="vtab-count">{(v.questions||[]).filter(q=>q.text).length}</span>
+                      </button>
+                    ))}
+                    <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+                      <button className="btn btn-outline btn-sm" onClick={() => setStep(2)}>← Формат</button>
+                      <button className="btn btn-green btn-sm" onClick={handlePublish} disabled={saving}>
+                        {saving ? '⏳ ...' : '🚀 Нийтлэх'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {showInlineAI && (
+                    <div className="inline-ai-panel">
+                      {inlineParsing ? (
+                        <div style={{textAlign:'center',padding:24}}><div className="spinner" /></div>
+                      ) : (
+                        <>
+                          <textarea className="form-textarea" style={{minHeight:120,fontFamily:'monospace',fontSize:'0.82rem'}}
+                            value={inlineRaw} onChange={e => setInlineRaw(e.target.value)}
+                            placeholder="Текст paste..." />
+                          {inlineErr && <div className="form-error">{inlineErr}</div>}
+                          <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
+                            <button className="btn btn-outline btn-sm" onClick={() => setShowInlineAI(false)}>Болих</button>
+                            <button className="btn btn-violet btn-sm" onClick={doInlineParse}>✨ Задлах</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
-                  {activeVar < variantCount - 1 ? (
-                    <button className="btn btn-sm" style={{background:'var(--violet)',color:'white'}} onClick={() => setActiveVar(activeVar + 1)}>
-                      {alpha(activeVar + 1)} хувилбар →
-                    </button>
-                  ) : variantCount < 5 ? (
-                    <button className="version-next-btn" onClick={goNextVariant}>
-                      ➕ Дараагийн хувилбар нэмэх
-                    </button>
-                  ) : (
-                    <button className="btn btn-green" onClick={handlePublish} disabled={saving}>
-                      {saving ? '⏳ ...' : '🚀 Нийтлэх'}
-                    </button>
+
+                  {!(currentVariant.questions || []).length && (
+                    <div style={{marginBottom:12}}>
+                      <button className="btn btn-outline" onClick={handleManual}>+ Хоосон асуулт нэмэх</button>
+                    </div>
                   )}
+
+                  <QuestionEditor
+                    questions={currentVariant.questions || []}
+                    defaultType={info.omrFormat === 'tf' ? 'tf' : info.omrFormat === 'grid' ? 'grid' : 'mcq'}
+                    subjectFeatures={profile?.features || []}
+                    onChange={(qs) => setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v))}
+                  />
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -2313,6 +3134,7 @@ function CreateExam({ apiKey, onSave, onCancel }) {
     </div>
   );
 }
+
 
 // ─── QR MODAL ─────────────────────────────────────────────────────────────────
 function QRModal({ exam, onClose }) {
@@ -2746,13 +3568,17 @@ function CheatDetailModal({ sub, onClose }) {
 }
 
 
-function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onCheatClose }) {
+function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onCheatClose, apiKey }) {
   const classOptions = useMemo(
     () => [...new Set(allSubs.map(s => (s.studentClass || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'mn')),
     [allSubs]
   );
   const [classFilter, setClassFilter] = useState('all');
   const [showClassMenu, setShowClassMenu] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState('');
+  const [verifiedSubs, setVerifiedSubs] = useState(null);
 
   useEffect(() => {
     if (classOptions.length === 0) setClassFilter('all');
@@ -2766,11 +3592,71 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
     return allSubs.filter(s => (s.studentClass || '').trim() === classFilter);
   }, [allSubs, classFilter]);
 
-  const avg = subs.length ? Math.round(subs.reduce((a, s) => a + s.score, 0) / subs.length) : 0;
-  const passed = subs.filter(s => s.score >= exam.passingScore).length;
+  const runAiAnalysis = async () => {
+    const list = verifiedSubs || subs;
+    if (!list.length) { setAiErr('Шинжлэх дүн алга'); return; }
+    setAiBusy(true); setAiErr('');
+    try {
+      const result = await analyzeExamWithAI({ apiKey, exam, subs: list });
+      setAiAnalysis(result);
+    } catch (e) {
+      setAiErr(e?.message || 'Анализ алдаа');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  // Teacher regrade from answerKeys (source of truth — blocks forged scores)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const db = getDb();
+      if (!db || !exam?.id || !subs.length) { setVerifiedSubs(null); return; }
+      try {
+        const snap = await roomRef(db, exam.id).child('answerKeys').once('value');
+        const keys = snap.val();
+        if (!keys) { setVerifiedSubs(null); return; }
+        const next = subs.map(s => {
+          const label = s.variantLabel || s.studentVersion || 'A';
+          const keyList = keys[label];
+          if (!Array.isArray(keyList) || !window.SESecurity) return s;
+          return SESecurity.regradeSubmission(s, keyList);
+        });
+        if (alive) setVerifiedSubs(next);
+
+        // Persist verified scores back (owner write)
+        const updates = {};
+        next.forEach(s => {
+          if (!s.id || !s.verified) return;
+          updates[`activeRooms/${exam.id}/submissions/${s.id}/score`] = s.score;
+          updates[`activeRooms/${exam.id}/submissions/${s.id}/correctCount`] = s.correctCount;
+          updates[`activeRooms/${exam.id}/submissions/${s.id}/totalCount`] = s.totalCount;
+          updates[`activeRooms/${exam.id}/submissions/${s.id}/verified`] = true;
+          updates[`activeRooms/${exam.id}/submissions/${s.id}/gradedBy`] = s.gradedBy || 'teacher-regrade';
+        });
+        if (Object.keys(updates).length) {
+          try { await db.ref().update(updates); } catch {}
+        }
+      } catch (e) {
+        console.warn('regrade', e);
+      }
+    })();
+    return () => { alive = false; };
+  }, [exam?.id, subs.length, classFilter]);
+
+  const displaySubs = verifiedSubs || subs;
+
+  // Auto-run heuristic (no API) once when subs load
+  useEffect(() => {
+    if (!displaySubs.length || aiAnalysis) return;
+    analyzeExamWithAI({ apiKey: null, exam, subs: displaySubs }).then(setAiAnalysis).catch(() => {});
+  }, [displaySubs.length, exam?.id]);
+
+  const avg = displaySubs.length ? Math.round(displaySubs.reduce((a, s) => a + s.score, 0) / displaySubs.length) : 0;
+  const passed = displaySubs.filter(s => s.score >= exam.passingScore).length;
 
   const variantGroups = {};
-  subs.forEach(s => {
+  displaySubs.forEach(s => {
     const vl = s.variantLabel || s.studentVersion || 'A';
     if (!variantGroups[vl]) variantGroups[vl] = [];
     variantGroups[vl].push(s);
@@ -2837,11 +3723,50 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
       </div>
       <div className="container">
         <div className="stats-strip">
-          <div className="stat-card"><div className="stat-val">{subs.length}</div><div className="stat-lbl">Нийт оролцсон</div></div>
+          <div className="stat-card"><div className="stat-val">{displaySubs.length}</div><div className="stat-lbl">Нийт оролцсон</div></div>
           <div className="stat-card"><div className="stat-val" style={{color:'var(--green)'}}>{passed}</div><div className="stat-lbl">Тэнцсэн</div></div>
-          <div className="stat-card"><div className="stat-val" style={{color:'var(--red)'}}>{subs.length - passed}</div><div className="stat-lbl">Тэнцээгүй</div></div>
+          <div className="stat-card"><div className="stat-val" style={{color:'var(--red)'}}>{displaySubs.length - passed}</div><div className="stat-lbl">Тэнцээгүй</div></div>
           <div className="stat-card"><div className="stat-val">{avg}%</div><div className="stat-lbl">Дундаж оноо</div></div>
         </div>
+
+        {(displaySubs.length > 0 || aiAnalysis) && (
+          <div className="ai-analysis-card">
+            <div className="ai-analysis-title">
+              🧠 AI Анализ — Сул талыг олж харах
+              <span className="badge badge-green" style={{fontWeight:600,fontSize:'0.7rem'}}>🔒 verified dүн</span>
+              <button className="btn btn-violet btn-sm" style={{marginLeft:'auto'}} onClick={runAiAnalysis} disabled={aiBusy || !displaySubs.length}>
+                {aiBusy ? '⏳ ...' : apiKey ? '✨ AI зөвлөмж шинэчлэх' : '📊 График шинэчлэх'}
+              </button>
+            </div>
+            {aiErr && <div className="form-error" style={{marginBottom:10}}>⚠ {aiErr}</div>}
+            {aiAnalysis && (
+              <>
+                <div className="ai-advice-box">
+                  <strong style={{color:'var(--violet)'}}>Зөвлөмж: </strong>
+                  {aiAnalysis.advice}
+                </div>
+                {aiAnalysis.bars?.length > 0 && (
+                  <div>
+                    <div style={{fontSize:'0.8rem',fontWeight:700,color:'var(--text2)',marginBottom:8}}>Ангийн дундаж гүйцэтгэл (сэдвээр)</div>
+                    <div className="bar-chart">
+                      {aiAnalysis.bars.slice(0, 6).map((b, i) => (
+                        <div className="bar-col" key={i}>
+                          <div className="bar-pct">{b.pct}%</div>
+                          <div className={'bar-fill' + (b.wrongPct >= 50 ? ' weak' : '')}
+                            style={{ height: Math.max(8, b.pct) + '%' }} />
+                          <div className="bar-lbl">{(b.topic || '').slice(0, 18)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {!aiAnalysis && !aiBusy && (
+              <div style={{fontSize:'0.85rem',color:'var(--text2)'}}>Дүн ирэхэд автоматаар сул сэдвийг тооцно. Groq key-тэй бол дэлгэрэнгүй зөвлөмж авна.</div>
+            )}
+          </div>
+        )}
 
         {variantLabels.length > 1 && (
           <div className="card" style={{marginBottom:18}}>
@@ -2871,7 +3796,7 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
           </div>
         )}
 
-        {subs.length === 0 ? (
+        {displaySubs.length === 0 ? (
           <div className="card"><div className="card-body">
             <div className="empty-state">
               <div className="empty-icon">📭</div>
@@ -2881,7 +3806,7 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
           </div></div>
         ) : (
           <div className="card">
-            <div className="card-header"><div className="card-title">📋 Сурагчдын хариулт</div></div>
+            <div className="card-header"><div className="card-title">📋 Сурагчдын хариулт {verifiedSubs ? '· ✅ дахин дүгнэгдсэн' : ''}</div></div>
             <div style={{overflowX:'auto'}}>
               <table className="sub-table">
                 <thead>
@@ -2890,7 +3815,7 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
                   </tr>
                 </thead>
                 <tbody>
-                  {subs.sort((a,b) => b.score - a.score).map((s, i) => {
+                  {displaySubs.slice().sort((a,b) => b.score - a.score).map((s, i) => {
                     const cheatCnt = (s.cheatLog||[]).length;
                     const pillCls = cheatCnt === 0 ? 'cheat-pill-0' : cheatCnt <= 2 ? 'cheat-pill-warn' : 'cheat-pill-danger';
                     const took = typeof s.timeSpentSec === 'number' ? fmtDur(s.timeSpentSec) : '—';
@@ -2932,7 +3857,7 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
   );
 }
 
-function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExam, onApiKey, onDeleteExam, onOpenOMR }) {
+function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExam, onApiKey, onDeleteExam, onOpenOMR, onLogout }) {
   const [view, setView] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyState, setApiKeyState] = useState(apiKey);
@@ -2980,6 +3905,7 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
       <ExamResultsView
         exam={view.exam}
         allSubs={allSubs}
+        apiKey={apiKeyState || apiKey}
         onBack={() => setView(null)}
         onCheatClick={setCheatSub}
         cheatSub={cheatSub}
@@ -3061,6 +3987,7 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
             <button className="btn btn-outline btn-sm" onClick={() => setShowSettings(true)}>⚙ API тохиргоо</button>
             <button className="btn btn-green btn-sm" onClick={openZipGrade} title="Цаасан хариулт сканер — OpenCV">📷 ZipGrade</button>
             <button className="btn btn-primary btn-sm" onClick={onCreateExam}>+ Шинэ тест</button>
+            {onLogout && <button className="btn btn-ghost btn-sm" onClick={onLogout} title="Гарах">🚪 Гарах</button>}
           </div>
         </div>
       </div>
@@ -3068,7 +3995,7 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
       <div className="container-lg">
         {!apiKey && (
           <div className="apikey-banner">
-            ⚠️ Anthropic API түлхүүр оруулаагүй тул AI задлан шинжилгээ ажиллахгүй.
+            ⚠️ Groq API түлхүүр оруулаагүй тул AI задлан шинжилгээ / асуулт үүсгэх ажиллахгүй.
             <button className="btn btn-outline btn-sm" onClick={() => setShowSettings(true)}>Оруулах</button>
           </div>
         )}
@@ -3151,10 +4078,14 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
 }
 
 // ─── OMR ANSWER SHEET (PRINT) ─────────────────────────────────────────────────
-function OMRAnswerSheet({ examTitle, examId }) {
+function OMRAnswerSheet({ examTitle, examId, omrMode = 'mcq', subject = '' }) {
+  const mode = omrMode === 'tf' ? 'tf' : omrMode === 'grid' ? 'grid' : 'mcq';
+  const profile = getSubjectProfile(subject);
+  const modeLabel = mode === 'tf' ? 'Зөв/Буруу' : mode === 'grid' ? 'Grid-in (0–9)' : 'A–D сонголт';
+
   return (
     <div className="omr-print-area">
-      <div className="omr-sheet">
+      <div className={'omr-sheet fmt-' + mode}>
         <div className="omr-marker omr-marker-tl" />
         <div className="omr-marker omr-marker-tr" />
         <div className="omr-marker omr-marker-bl" />
@@ -3162,6 +4093,8 @@ function OMRAnswerSheet({ examTitle, examId }) {
         <div className="omr-sheet-head">
           <h1>SmartEXAM — Хариултын хуудас</h1>
           <div style={{ fontSize: '11pt' }}>{examTitle || 'Шалгалт'}</div>
+          {(subject || profile) && <div style={{ fontSize: '10pt' }}>{profile?.icon || ''} {subject || profile?.name}</div>}
+          <div className="omr-format-badge">Формат: {modeLabel}</div>
           <div className="omr-sheet-meta">
             <span>Нэр: <span className="omr-meta-line" /></span>
             <span>Анги: <span className="omr-meta-line" style={{ minWidth: 80 }} /></span>
@@ -3169,27 +4102,77 @@ function OMRAnswerSheet({ examTitle, examId }) {
           </div>
           {examId && <div style={{ fontSize: '8pt', marginTop: 6, color: '#64748b' }}>Код: {examId}</div>}
         </div>
-        <table className="omr-grid-table">
-          <thead>
-            <tr>
-              <th className="omr-q-num">№</th>
-              {OMR_OPTS.map(o => <th key={o}>{o}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: OMR_Q_COUNT }, (_, i) => (
-              <tr key={i}>
-                <td className="omr-q-num">{i + 1}</td>
-                {OMR_OPTS.map(o => (
-                  <td key={o} className="omr-bubble-cell"><span className="omr-bubble" /></td>
-                ))}
+
+        {mode === 'grid' ? (
+          <table className="omr-grid-table omr-gridin-table">
+            <thead>
+              <tr>
+                <th className="omr-q-num">№</th>
+                <th>Зуун</th><th>Аравт</th><th>Нэгж</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {Array.from({ length: OMR_Q_COUNT }, (_, i) => (
+                <tr key={i}>
+                  <td className="omr-q-num">{i + 1}</td>
+                  {[0,1,2].map(col => (
+                    <td key={col}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                        {Array.from({ length: 10 }, (__, d) => (
+                          <span key={d} className="omr-gridin-digit">{d}</span>
+                        ))}
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : mode === 'tf' ? (
+          <table className="omr-grid-table">
+            <thead>
+              <tr>
+                <th className="omr-q-num">№</th>
+                <th><span className="omr-tf-label">А. ЗӨВ / ҮНЭН</span></th>
+                <th><span className="omr-tf-label">В. БУРУУ / ХУДАЛ</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: OMR_Q_COUNT }, (_, i) => (
+                <tr key={i}>
+                  <td className="omr-q-num">{i + 1}</td>
+                  <td className="omr-bubble-cell"><span className="omr-bubble" /></td>
+                  <td className="omr-bubble-cell"><span className="omr-bubble" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <table className="omr-grid-table">
+            <thead>
+              <tr>
+                <th className="omr-q-num">№</th>
+                {OMR_OPTS.map(o => <th key={o}>{o}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: OMR_Q_COUNT }, (_, i) => (
+                <tr key={i}>
+                  <td className="omr-q-num">{i + 1}</td>
+                  {OMR_OPTS.map(o => (
+                    <td key={o} className="omr-bubble-cell"><span className="omr-bubble" /></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
         <div className="omr-instruct">
-          • Асуулт бүрт зөвхөн <strong>нэг</strong> дугуйг бүрэн хар болгоорой.<br/>
-          • 4 өнцгийн хар дөрвөлжинг камертад бүрэн харагдах ёстой.<br/>
+          {mode === 'grid' && '• Асуулт бүрт 3 баганаас (зуун/аравт/нэгж) тохирох тоог бүрэн хар болгоорой.'}
+          {mode === 'tf' && '• Асуулт бүрт зөвхөн нэг — Зөв эсвэл Буруу — дугуйг бүрэн хар болгоорой.'}
+          {mode === 'mcq' && '• Асуулт бүрт зөвхөн нэг дугуйг бүрэн хар болгоорой.'}
+          <br/>• 4 өнцгийн хар дөрвөлжинг камертад бүрэн харагдах ёстой.<br/>
           • HB карандаа ашиглахыг зөвлөж байна.
         </div>
       </div>
@@ -3199,6 +4182,8 @@ function OMRAnswerSheet({ examTitle, examId }) {
 
 // ─── OMR SCANNER PAGE ─────────────────────────────────────────────────────────
 function OMRScannerPage({ exam, onBack, onSubmit }) {
+  const omrMode = exam?.omrMode || (getSubjectProfile(exam?.subjectId || exam?.subject)?.omrMode) || 'mcq';
+  const keyOpts = omrMode === 'tf' ? ['A', 'B'] : omrMode === 'grid' ? null : OMR_OPTS;
   const [tab, setTab] = useState('key');
   const [cvReady, setCvReady] = useState(false);
   const [cvErr, setCvErr] = useState('');
@@ -3217,6 +4202,7 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
   const [studentName, setStudentName] = useState('');
   const [studentClass, setStudentClass] = useState('');
   const [lastResult, setLastResult] = useState(null);
+  const [lastAnswers, setLastAnswers] = useState(null);
   const [showFlash, setShowFlash] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
 
@@ -3284,7 +4270,7 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
   };
 
   const applyKeyText = () => {
-    setAnswerKey(parseAnswerKeyText(keyText));
+    setAnswerKey(parseAnswerKeyText(keyText, omrMode));
   };
 
   const finalizeScan = useCallback((answers) => {
@@ -3294,11 +4280,12 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
       setTab('key');
       return;
     }
-    const graded = gradeOMRAnswers(answers, answerKey);
+    const graded = gradeOMRAnswers(answers, answerKey, OMR_Q_COUNT);
     if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
-    setLastResult(graded);
+    setLastAnswers(answers);
+    setLastResult({ ...graded, answers });
     setShowFlash(true);
-    setTimeout(() => setShowFlash(false), 1400);
+    setTimeout(() => setShowFlash(false), 1800);
 
     const sub = saveOMRSubmission(exam.id, {
       studentName: studentName.trim() || 'OMR ' + new Date().toLocaleTimeString('mn-MN'),
@@ -3310,10 +4297,11 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
       totalCount: graded.total,
       cheatLog: [],
       timeSpentSec: 0,
-      variantLabel: 'OMR'
+      variantLabel: 'OMR',
+      omrMode
     });
     onSubmit?.(sub);
-  }, [answerKey, exam.id, studentName, studentClass, onSubmit]);
+  }, [answerKey, exam.id, studentName, studentClass, onSubmit, omrMode]);
 
   const captureAndProcess = useCallback(async () => {
     if (!cvReady || !videoRef.current || !canvasRef.current) return;
@@ -3329,7 +4317,7 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0);
-      const result = processOMRFrame(cv, canvas);
+      const result = processOMRFrame(cv, canvas, omrMode, OMR_Q_COUNT);
       if (!result.ok) {
         setErr(result.error);
         stableCountRef.current = 0;
@@ -3350,7 +4338,7 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
     } finally {
       setProcessing(false);
     }
-  }, [cvReady, finalizeScan]);
+  }, [cvReady, finalizeScan, omrMode]);
 
   useEffect(() => {
     const db = getDb();
@@ -3399,8 +4387,9 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
       {showFlash && lastResult && (
         <div className="omr-result-flash" onClick={() => setShowFlash(false)} title="Хаах">
           <div className="omr-result-box">
+            <div style={{ fontSize: '2.5rem', marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>Амжилттай уншлаа!</div>
             <div className="big">{lastResult.correct}/{lastResult.total}</div>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>зөв бөглөлөө</div>
             <div style={{ marginTop: 8, opacity: 0.9 }}>{lastResult.score}%</div>
           </div>
         </div>
@@ -3410,8 +4399,8 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
         <div className="container-lg" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={handleBack}>← Буцах</button>
           <div>
-            <h2 className="page-title">📷 ZipGrade</h2>
-            <div className="page-sub">{exam.title} · Цаасан хариулт сканер (OpenCV)</div>
+            <h2 className="page-title">📷 OMR Сканер</h2>
+            <div className="page-sub">{exam.title} · {exam.subject} · формат: {omrMode} (OpenCV)</div>
           </div>
         </div>
       </div>
@@ -3442,21 +4431,23 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
               <button className="btn btn-primary" onClick={() => window.print()}>🖨 Хэвлэх / PDF хадгалах</button>
             </div>
             <div className="omr-print-wrap">
-              <OMRAnswerSheet examTitle={exam.title} examId={exam.id} />
+              <OMRAnswerSheet examTitle={exam.title} examId={exam.id} omrMode={omrMode} subject={exam.subject} />
             </div>
           </div>
         )}
 
         {tab === 'key' && (
           <div className="card">
-            <div className="card-header"><div className="card-title">🔑 Зөв хариултын түлхүүр (20 асуулт)</div></div>
+            <div className="card-header"><div className="card-title">🔑 Зөв хариултын түлхүүр (20 · {omrMode})</div></div>
             <div className="card-body">
               <div className="form-group">
-                <label className="form-label">Богино формат (1-A, 2-B, 3-C...)</label>
+                <label className="form-label">
+                  {omrMode === 'grid' ? 'Богино формат (1-115, 2-042...)' : omrMode === 'tf' ? 'Богино формат (1-A, 2-B...) A=Зөв B=Буруу' : 'Богино формат (1-A, 2-B...)'}
+                </label>
                 <textarea
                   className="form-textarea"
                   rows={3}
-                  placeholder="1-A, 2-B, 3-C, 4-D, 5-A ..."
+                  placeholder={omrMode === 'grid' ? '1-115, 2-042, 3-007...' : '1-A, 2-B, 3-C...'}
                   value={keyText}
                   onChange={e => setKeyText(e.target.value)}
                   onBlur={applyKeyText}
@@ -3466,17 +4457,32 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
               <div className="omr-key-grid">
                 {Array.from({ length: OMR_Q_COUNT }, (_, i) => {
                   const q = i + 1;
+                  if (omrMode === 'grid') {
+                    return (
+                      <div key={q} className="omr-key-row">
+                        <label>{q}.</label>
+                        <input className="form-input" style={{ width: 80, padding: '4px 8px' }} maxLength={3}
+                          value={answerKey[q] || ''}
+                          onChange={e => {
+                            const v = e.target.value.replace(/\D/g, '').slice(0, 3);
+                            setKeyForQuestion(q, v);
+                          }}
+                          placeholder="000" />
+                      </div>
+                    );
+                  }
+                  const opts = keyOpts || OMR_OPTS;
                   return (
                     <div key={q} className="omr-key-row">
                       <label>{q}.</label>
-                      {OMR_OPTS.map(o => (
+                      {opts.map(o => (
                         <button
                           key={o}
                           type="button"
-                          className={`btn btn-sm ${answerKey[q] === o ? 'btn-violet' : 'btn-outline'}`}
+                          className={'btn btn-sm' + (answerKey[q] === o ? ' btn-violet' : ' btn-outline')}
                           style={{ minWidth: 36, padding: '4px 8px' }}
                           onClick={() => setKeyForQuestion(q, o)}
-                        >{o}</button>
+                        >{omrMode === 'tf' ? (o === 'A' ? 'Зөв' : 'Буруу') : o}</button>
                       ))}
                     </div>
                   );
@@ -3527,8 +4533,24 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
 
               {lastResult && (
                 <div style={{ marginTop: 16, padding: 16, background: 'var(--green-light)', borderRadius: 12, border: '1px solid #a7f3d0' }}>
-                  <strong style={{ color: 'var(--green)' }}>Сүүлийн үр дүн: {lastResult.correct}/{lastResult.total} ({lastResult.score}%)</strong>
-                  <span style={{ marginLeft: 8, fontSize: '0.85rem', color: 'var(--text2)' }}>Firebase-д хадгалагдсан</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: '1.4rem' }}>✅</span>
+                    <strong style={{ color: 'var(--green)', fontSize: '1.05rem' }}>Амжилттай уншлаа! — {lastResult.correct}/{lastResult.total} ({lastResult.score}%)</strong>
+                  </div>
+                  <ul className="omr-answers-list">
+                    {Array.from({ length: OMR_Q_COUNT }, (_, i) => {
+                      const q = i + 1;
+                      const got = (lastAnswers || lastResult.answers || {})[q] || '—';
+                      const exp = answerKey[q] || '—';
+                      const ok = lastResult.detail?.[q]?.ok;
+                      return (
+                        <li key={q}>
+                          <span>{q}. уншсан: <strong>{got}</strong></span>
+                          <span style={{ color: ok ? 'var(--green)' : 'var(--red)' }}>зөв: {exp} {ok ? '✓' : '✗'}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               )}
             </div>
@@ -3909,41 +4931,78 @@ function ExamTaker({ exam, studentName, studentClass, onSubmit, onBack }) {
     if (submittedRef.current) return;
     submittedRef.current = true;
     const ans = { ...answers, ...extraAnswers };
-    const qs = orderedQuestions.filter(q => q.answer);
-    const correct = qs.filter(q => ans[q.id] === q.answer).length;
-    const total = qs.length || orderedQuestions.length;
-    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+    Object.keys(ans).forEach(k => {
+      if (typeof ans[k] === 'string' && ans[k].includes('_')) {
+        ans[k] = ans[k].replace(/_/g, '');
+      }
+    });
     const timeSpentSec = Math.round((Date.now() - startMsRef.current) / 1000);
     setSubmitted(true);
-    const submission = {
-      id: uid(),
-      examId: exam.id,
-      studentName,
-      studentClass,
-      answers: ans,
-      score,
-      correctCount: correct,
-      totalCount: total,
-      timeSpentSec,
-      variantIndex: exam.variantIndex ?? 0,
-      variantLabel: exam.variantLabel || alpha(exam.variantIndex ?? 0),
-      cheatLog: cheatLogRef.current,
-      submittedAt: new Date().toISOString()
-    };
 
-    // Persist to Firebase RTDB so teacher sees results across devices
-    const db = getDb();
-    if (db) {
+    (async () => {
+      let submission = {
+        id: uid(),
+        examId: exam.id,
+        studentName: sanitizeText(studentName, 80),
+        studentClass: sanitizeText(studentClass, 40),
+        answers: ans,
+        score: 0,
+        correctCount: 0,
+        totalCount: (exam.questions || []).length,
+        timeSpentSec,
+        variantIndex: exam.variantIndex ?? 0,
+        variantLabel: exam.variantLabel || alpha(exam.variantIndex ?? 0),
+        cheatLog: cheatLogRef.current,
+        submittedAt: new Date().toISOString(),
+        verified: false,
+        gradedBy: 'pending'
+      };
+
       try {
-        roomRef(db, exam.id).child('submissions').child(submission.id).set({
-          ...submission,
-          studentVersion: submission.variantLabel
-        });
-      } catch {}
-    }
+        const user = await ensureStudentAuth();
+        submission.uid = user.uid;
 
-    onSubmit(submission);
-  }, [answers, exam, orderedQuestions, studentName, studentClass, onSubmit]);
+        // Prefer Cloud Function grading (answers never leave server for scoring)
+        try {
+          const graded = await callGradeSubmission({
+            roomId: exam.id,
+            answers: ans,
+            studentName: submission.studentName,
+            studentClass: submission.studentClass,
+            variantLabel: submission.variantLabel,
+            cheatLog: submission.cheatLog,
+            timeSpentSec
+          });
+          submission = {
+            ...submission,
+            id: graded.id || submission.id,
+            score: graded.score,
+            correctCount: graded.correctCount,
+            totalCount: graded.totalCount,
+            verified: true,
+            gradedBy: 'cloud'
+          };
+        } catch (fnErr) {
+          // Fallback: store answers only; teacher regrades. Provisional score = unanswered count only.
+          console.warn('Cloud grade failed, storing answers for teacher regrade', fnErr);
+          const db = getDb();
+          if (db) {
+            await roomRef(db, exam.id).child('submissions').child(submission.id).set({
+              ...submission,
+              studentVersion: submission.variantLabel,
+              score: 0,
+              provisional: true,
+              note: 'Багш дахин дүгнэнэ'
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Submit auth/save error', e);
+      }
+
+      onSubmit(submission);
+    })();
+  }, [answers, exam, studentName, studentClass, onSubmit]);
 
   const answered = Object.keys(answers).length;
   const total = orderedQuestions.length;
@@ -4019,26 +5078,86 @@ function ExamTaker({ exam, studentName, studentClass, onSubmit, onBack }) {
       </div>
 
       <div className="container-sm" style={{padding:'24px 20px'}}>
-        {orderedQuestions.map((q, qi) => (
-          <div className={`question-block ${answers[q.id] ? 'answered' : ''}`} key={q.id}>
-            <div style={{display:'flex',gap:10,marginBottom:12}}>
+        {orderedQuestions.map((q, qi) => {
+          const type = q.type || 'mcq';
+          return (
+          <div className={'question-block' + (answers[q.id] != null && answers[q.id] !== '' ? ' answered' : '')} key={q.id}>
+            <div style={{display:'flex',gap:10,marginBottom:12,flexWrap:'wrap'}}>
               <span className="q-num">#{q.id}</span>
-              {answers[q.id] && <span style={{fontSize:'0.75rem',color:'var(--green)',fontWeight:600,display:'flex',alignItems:'center',gap:4}}>✓ Хариуллаа</span>}
+              {type === 'tf' && <span className="badge badge-amber">Зөв/Буруу</span>}
+              {type === 'grid' && <span className="badge badge-blue">Grid-in</span>}
+              {q.topic && <span className="badge badge-gray">{q.topic}</span>}
+              {answers[q.id] != null && answers[q.id] !== '' && <span style={{fontSize:'0.75rem',color:'var(--green)',fontWeight:600}}>✓ Хариуллаа</span>}
             </div>
+            {q.sourceText && <div className="source-box">{q.sourceText}</div>}
+            {q.imageUrl && (
+              <div className="q-image-wrap"><img src={q.imageUrl} alt="Асуултын зураг" /></div>
+            )}
+            {q.audioUrl && (
+              <div className="audio-player-box">
+                <span style={{fontSize:'1.2rem'}}>🎧</span>
+                <audio controls src={q.audioUrl} preload="metadata" />
+              </div>
+            )}
             <div className="q-text" style={{fontSize:'0.95rem',marginBottom:14}}>{q.text}</div>
-            {q.options.map(opt => (
-              <button
-                key={opt.key}
-                className={`student-option ${answers[q.id] === opt.key ? 'selected' : ''}`}
-                onClick={() => setAnswers(a => ({...a, [q.id]: opt.key}))}
-              >
-                <div className="opt-radio" />
-                <span style={{fontWeight:600,color:'var(--text2)',minWidth:16}}>{opt.key})</span>
-                <span>{opt.text}</span>
-              </button>
-            ))}
+
+            {type === 'tf' ? (
+              <div className="tf-options">
+                {(q.options || defaultOptionsForType('tf')).map(opt => (
+                  <button key={opt.key}
+                    className={'tf-btn' + (opt.key === 'A' ? ' true' : ' false') + (answers[q.id] === opt.key ? ' selected' : '')}
+                    onClick={() => setAnswers(a => ({...a, [q.id]: opt.key}))}>
+                    {opt.key === 'A' ? '✓ ' : '✗ '}{opt.text}
+                  </button>
+                ))}
+              </div>
+            ) : type === 'grid' ? (
+              <div>
+                <div className="grid-in-row">
+                  {[0,1,2].map(ci => {
+                    const digits = String(answers[q.id] || '___');
+                    const cur = digits[ci] && digits[ci] !== '_' ? digits[ci] : '';
+                    return (
+                      <div className="grid-in-col" key={ci}>
+                        <div style={{fontSize:'0.7rem',fontWeight:700,color:'var(--text3)',marginBottom:4}}>{['Зуун','Аравт','Нэгж'][ci]}</div>
+                        {Array.from({length:10}, (_, d) => (
+                          <button type="button" key={d}
+                            className={'grid-in-digit' + (cur === String(d) ? ' filled' : '')}
+                            onClick={() => {
+                              setAnswers(a => {
+                                const arr = String(a[q.id] || '___').padEnd(3, '_').slice(0, 3).split('');
+                                arr[ci] = String(d);
+                                return {...a, [q.id]: arr.join('')};
+                              });
+                            }}>{d}</button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="grid-in-preview">
+                  Хариу: {(answers[q.id] || '___').toString().replace(/_/g, '·')}
+                  {q.unit ? ' ' + q.unit : ''}
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{marginTop:6}}
+                  onClick={() => setAnswers(a => ({...a, [q.id]: ''}))}>Цэвэрлэх</button>
+              </div>
+            ) : (
+              (q.options || []).map(opt => (
+                <button
+                  key={opt.key}
+                  className={'student-option' + (answers[q.id] === opt.key ? ' selected' : '')}
+                  onClick={() => setAnswers(a => ({...a, [q.id]: opt.key}))}
+                >
+                  <div className="opt-radio" />
+                  <span style={{fontWeight:600,color:'var(--text2)',minWidth:16}}>{opt.key})</span>
+                  <span>{opt.text}</span>
+                </button>
+              ))
+            )}
           </div>
-        ))}
+          );
+        })}
 
         <div style={{textAlign:'center',padding:'20px 0 40px'}}>
           <button className="btn btn-green btn-lg" onClick={() => setShowConfirm(true)} style={{minWidth:200}}>
@@ -4053,6 +5172,9 @@ function ExamTaker({ exam, studentName, studentClass, onSubmit, onBack }) {
 // ─── RESULT PAGE ──────────────────────────────────────────────────────────────
 function ResultPage({ submission, exam, onHome }) {
   const pass = submission.score >= exam.passingScore;
+  const verified = !!submission.verified;
+  const hasLocalAnswers = (exam.questions || []).some(q => q.answer != null && q.answer !== '');
+
   return (
     <div>
       <div className="topbar">
@@ -4060,7 +5182,7 @@ function ResultPage({ submission, exam, onHome }) {
       </div>
       <div className="container-sm" style={{padding:'32px 20px'}}>
         <div className="result-hero">
-          <div className={`score-circle ${pass ? 'pass' : 'fail'}`}>
+          <div className={'score-circle ' + (pass ? 'pass' : 'fail')}>
             <div className="score-pct">{submission.score}%</div>
             <div className="score-label">{pass ? 'ТЭНЦСЭН' : 'ТЭНЦЭЭГҮЙ'}</div>
           </div>
@@ -4070,52 +5192,71 @@ function ResultPage({ submission, exam, onHome }) {
           <div style={{fontSize:'0.9rem',color:'var(--text2)',marginBottom:14}}>
             {submission.studentName} · {exam.title}
           </div>
+          {!verified && (
+            <div style={{fontSize:'0.82rem',color:'#92400e',marginBottom:10,background:'var(--amber-light)',padding:'8px 12px',borderRadius:8,display:'inline-block'}}>
+              ⏳ Дүн баталгаажуулалт хүлээж байна — хариулт амжилттай илгээгдсэн
+            </div>
+          )}
+          {verified && (
+            <div style={{fontSize:'0.78rem',color:'var(--green)',marginBottom:10}}>✅ Баталгаажсан дүн</div>
+          )}
           <div style={{display:'flex',justifyContent:'center',gap:24,fontSize:'0.9rem'}}>
             <span><strong style={{color:'var(--green)'}}>{submission.correctCount}</strong> зөв</span>
-            <span><strong style={{color:'var(--red)'}}>{submission.totalCount - submission.correctCount}</strong> буруу</span>
+            <span><strong style={{color:'var(--red)'}}>{(submission.totalCount || 0) - (submission.correctCount || 0)}</strong> буруу</span>
             <span>Нийт <strong>{submission.totalCount}</strong></span>
           </div>
         </div>
 
         <div className="card mb-3">
-          <div className="card-header"><div className="card-title">📝 Асуулт тус бүрийн үр дүн</div></div>
+          <div className="card-header"><div className="card-title">📝 Таны хариултууд</div></div>
           <div className="card-body" style={{padding:'14px'}}>
-            {exam.questions.map(q => {
-              const ua = submission.answers[q.id];
-              const correct = q.answer ? ua === q.answer : null;
-              return (
-                <div key={q.id} style={{borderBottom:'1px solid var(--border)',paddingBottom:12,marginBottom:12}}>
-                  <div style={{display:'flex',gap:8,alignItems:'flex-start',marginBottom:8}}>
-                    <span className="q-num">#{q.id}</span>
-                    {q.answer && (
-                      <span style={{fontSize:'0.75rem',fontWeight:700,color: correct ? 'var(--green)' : 'var(--red)'}}>
-                        {correct ? '✓ Зөв' : '✗ Буруу'}
-                      </span>
+            {!hasLocalAnswers ? (
+              <div style={{fontSize:'0.88rem',color:'var(--text2)',lineHeight:1.55}}>
+                Аюулгүй байдлын үүднээс зөв хариултууд сурагчид харагдахгүй.
+                <ul style={{marginTop:12,paddingLeft:18}}>
+                  {Object.entries(submission.answers || {}).map(([qid, a]) => (
+                    <li key={qid}>#{qid}: <strong>{String(a)}</strong></li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              (exam.questions || []).map(q => {
+                const ua = submission.answers[q.id];
+                const type = q.type || 'mcq';
+                const correct = q.answer != null && q.answer !== '' ? answersEqual(ua, q.answer, type) : null;
+                return (
+                  <div key={q.id} style={{borderBottom:'1px solid var(--border)',paddingBottom:12,marginBottom:12}}>
+                    <div style={{display:'flex',gap:8,alignItems:'flex-start',marginBottom:8}}>
+                      <span className="q-num">#{q.id}</span>
+                      {q.answer != null && q.answer !== '' && (
+                        <span style={{fontSize:'0.75rem',fontWeight:700,color: correct ? 'var(--green)' : 'var(--red)'}}>
+                          {correct ? '✓ Зөв' : '✗ Буруу'}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{fontSize:'0.875rem',marginBottom:10}}>{q.text}</div>
+                    {type === 'grid' ? (
+                      <div>Таны хариу: <strong>{String(ua || '—').replace(/_/g, '')}</strong></div>
+                    ) : (
+                      (q.options || []).map(opt => {
+                        const isUser = ua === opt.key;
+                        const isAnswer = q.answer === opt.key;
+                        let cls = 'student-option';
+                        if (isAnswer) cls += ' correct-show';
+                        else if (isUser && !isAnswer) cls += ' wrong-show';
+                        return (
+                          <div key={opt.key} className={cls} style={{cursor:'default'}}>
+                            <div className="opt-radio" />
+                            <span style={{fontWeight:600,minWidth:16}}>{opt.key})</span>
+                            <span>{opt.text}</span>
+                          </div>
+                        );
+                      })
                     )}
-                    {!q.answer && <span style={{fontSize:'0.75rem',color:'var(--text3)'}}>— Оноогүй асуулт</span>}
                   </div>
-                  <div style={{fontSize:'0.875rem',color:'var(--text)',marginBottom:10}}>{q.text}</div>
-                  <div style={{display:'flex',flexDirection:'column',gap:5}}>
-                    {q.options.map(opt => {
-                      const isUser = ua === opt.key;
-                      const isAnswer = q.answer === opt.key;
-                      let cls = 'student-option';
-                      if (isAnswer) cls += ' correct-show';
-                      else if (isUser && !isAnswer) cls += ' wrong-show';
-                      return (
-                        <div key={opt.key} className={cls} style={{cursor:'default'}}>
-                          <div className="opt-radio" />
-                          <span style={{fontWeight:600,color:'var(--text2)',minWidth:16}}>{opt.key})</span>
-                          <span>{opt.text}</span>
-                          {isAnswer && <span style={{marginLeft:'auto',fontSize:'0.72rem',fontWeight:700,color:'var(--green)'}}>✓ зөв</span>}
-                          {isUser && !isAnswer && <span style={{marginLeft:'auto',fontSize:'0.72rem',fontWeight:700,color:'var(--red)'}}>← таны хариулт</span>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -4126,6 +5267,7 @@ function ResultPage({ submission, exam, onHome }) {
     </div>
   );
 }
+
 
 // ─── QR STUDENT LOGIN ─────────────────────────────────────────────────────────
 function QRStudentLogin({ exam, qrClassName, onStart, onBack }) {
@@ -4248,32 +5390,54 @@ function App() {
     }
   }, []);
 
-  // Hash + browser back (←) — 404 засах
+  // Hash + browser back (←) — Auth шаардлагатай
   useEffect(() => {
+    const requireTeacher = () => {
+      const u = ensureTeacherAuth();
+      if (!u) {
+        setPage({ type: 'teacherLogin' });
+        return null;
+      }
+      return u.displayName || localStorage.getItem(SE_TEACHER) || u.email || 'Багш';
+    };
     const applyHash = () => {
       const tag = (window.location.hash || '').replace(/^#/, '').split('&')[0];
       if (tag === 'zipgrade') {
+        const name = requireTeacher();
+        if (!name) return;
         try {
           const exam = JSON.parse(sessionStorage.getItem(SE_ZIPGRADE_EXAM) || 'null');
-          const name = localStorage.getItem(SE_TEACHER) || 'Багш';
           if (exam?.id) setPage({ type: 'omrScanner', exam, teacherName: name });
           else setPage({ type: 'teacherDash', name });
         } catch {
-          setPage({ type: 'teacherDash', name: localStorage.getItem(SE_TEACHER) || 'Багш' });
+          setPage({ type: 'teacherDash', name });
         }
         return;
       }
       if (tag === 'teacher') {
-        setPage({ type: 'teacherDash', name: localStorage.getItem(SE_TEACHER) || 'Багш' });
+        const name = requireTeacher();
+        if (name) setPage({ type: 'teacherDash', name });
         return;
       }
       if (!tag) setPage(p => (p.type === 'omrScanner' || p.type === 'teacherDash') ? { type: 'landing' } : p);
     };
     window.addEventListener('popstate', applyHash);
     const tag0 = (window.location.hash || '').replace(/^#/, '');
-    if (tag0 === 'teacher') setPage({ type: 'teacherDash', name: localStorage.getItem(SE_TEACHER) || 'Багш' });
-    else if (tag0 === 'zipgrade') applyHash();
+    if (tag0 === 'teacher' || tag0 === 'zipgrade') applyHash();
     return () => window.removeEventListener('popstate', applyHash);
+  }, []);
+
+  // Auth state — anonymous-гүй багш session сэргээнэ
+  useEffect(() => {
+    const auth = getAuth();
+    if (!auth) return;
+    const unsub = auth.onAuthStateChanged(user => {
+      if (user && !user.isAnonymous) {
+        const name = user.displayName || localStorage.getItem(SE_TEACHER) || user.email || 'Багш';
+        try { localStorage.setItem(SE_TEACHER, name); } catch {}
+      }
+    });
+    return () => unsub();
   }, []);
 
   // Handle QR URL hash on load
@@ -4409,7 +5573,10 @@ function App() {
           <LandingPage onSelect={() => {}} />
           <TeacherLogin
             onLogin={(name, key) => {
-              if (key) setApiKey(key);
+              if (key) {
+                setApiKey(key);
+                try { sessionStorage.setItem('se_apikey', key); localStorage.removeItem('se_apikey'); } catch {}
+              }
               try { localStorage.setItem(SE_TEACHER, name); } catch {}
               setPage({ type: 'teacherDash', name });
               history.replaceState({ se: 'teacher' }, '', appUrlWithHash('teacher'));
@@ -4432,7 +5599,13 @@ function App() {
               apiKey={apiKey}
               teacherName={page.name}
               onCreateExam={() => setPage({ ...page, type: 'createExam' })}
-              onApiKey={k => { setApiKey(k); localStorage.setItem('se_apikey', k); }}
+              onApiKey={k => { setApiKey(k); try { sessionStorage.setItem('se_apikey', k); localStorage.removeItem('se_apikey'); } catch {} }}
+              onLogout={async () => {
+                await teacherSignOut();
+                setApiKey('');
+                setPage({ type: 'landing' });
+                history.replaceState({ se: 'landing' }, '', appUrlWithHash(''));
+              }}
               onDeleteExam={deleteExam}
               onOpenOMR={exam => goZipGrade(exam, page.name)}
             />

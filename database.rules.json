@@ -1,0 +1,126 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "activeRooms": {
+      "$roomId": {
+        ".read": "auth != null && (data.child('ownerUid').val() == auth.uid || data.child('publicReadable').val() == true)",
+        ".write": "auth != null && data.exists() && !newData.exists() && data.child('ownerUid').val() == auth.uid",
+
+        "ownerUid": {
+          ".write": "auth != null && ((!data.exists() && newData.val() == auth.uid) || (data.exists() && data.val() == auth.uid && newData.val() == auth.uid))",
+          ".validate": "newData.isString() && newData.val().length > 8 && newData.val().length < 128"
+        },
+        "publicReadable": {
+          ".write": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
+          ".validate": "newData.isBoolean()"
+        },
+        "roomID": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)",
+          ".validate": "newData.isString() && newData.val().length <= 64"
+        },
+        "title": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)",
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200"
+        },
+        "subject": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)",
+          ".validate": "newData.isString() && newData.val().length <= 100"
+        },
+        "subjectId": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
+        },
+        "duration": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)",
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 300"
+        },
+        "passingScore": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "omrFormat": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
+        },
+        "omrMode": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
+        },
+        "createdAt": {
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
+        },
+        "stopped": {
+          ".write": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
+          ".validate": "newData.isBoolean()"
+        },
+        "stoppedAt": {
+          ".write": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid"
+        },
+
+        "versions": {
+          ".read": "auth != null",
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
+        },
+
+        "answerKeys": {
+          ".read": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
+        },
+
+        "omrAnswerKey": {
+          ".read": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
+          ".write": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid"
+        },
+
+        "classes": {
+          "$classKey": {
+            ".read": "auth != null",
+            ".write": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
+            ".validate": "newData.hasChildren(['name']) && newData.child('name').isString() && newData.child('name').val().length <= 40"
+          }
+        },
+
+        "joins": {
+          ".read": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
+          "$joinId": {
+            ".write": "!data.exists() && auth != null && newData.hasChildren(['name', 'cls'])",
+            ".validate": "newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 80 && newData.child('cls').isString() && newData.child('cls').val().length <= 40"
+          }
+        },
+
+        "variantAllocator": {
+          "$classKey": {
+            ".read": "auth != null",
+            ".write": "auth != null"
+          }
+        },
+
+        "variantByStudent": {
+          "$classKey": {
+            "$studentKey": {
+              ".read": "auth != null",
+              ".write": "auth != null && (!data.exists() || data.child('uid').val() == auth.uid)",
+              ".validate": "newData.hasChildren(['label']) && newData.child('label').isString() && newData.child('label').val().length <= 2"
+            }
+          }
+        },
+
+        "submissions": {
+          ".read": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
+          "$subId": {
+            ".read": "auth != null && (root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid || data.child('uid').val() == auth.uid)",
+            ".write": "auth != null && ((!data.exists() && newData.child('uid').val() == auth.uid) || (data.exists() && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid))",
+            ".validate": "newData.hasChildren(['studentName', 'answers', 'uid']) && newData.child('studentName').isString() && newData.child('studentName').val().length > 0 && newData.child('studentName').val().length <= 80 && (!newData.hasChild('score') || (newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 100))"
+          }
+        }
+      }
+    },
+
+    "teachers": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['displayName']) && newData.child('displayName').isString() && newData.child('displayName').val().length <= 80"
+      }
+    }
+  }
+}
