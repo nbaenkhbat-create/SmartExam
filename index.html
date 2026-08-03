@@ -1424,19 +1424,12 @@ const displayClassName = (key, fallback) => {
 };
 const lastQrClassStorageKey = (examId) => 'se_qr_class_' + examId;
 
-// ─── CHEAT EXEMPT NAMES ────────────────────────────────────────────────────────
-const SE_CHEAT_EXEMPT_KEY = 'se_cheat_exempt_names';
-const DEFAULT_CHEAT_EXEMPT = 'enhbat,chinbold';
-const getCheatExemptNames = () => {
-  try {
-    const raw = localStorage.getItem(SE_CHEAT_EXEMPT_KEY);
-    const source = (raw !== null ? raw : DEFAULT_CHEAT_EXEMPT);
-    return source.split(',').map(n => n.trim().toLowerCase()).filter(Boolean);
-  } catch { return ['enhbat', 'chinbold']; }
-};
+// ─── CHEAT EXEMPT (code-only; not shown in UI) ────────────────────────────────
+const CHEAT_EXEMPT_NAMES = ['enhbat', 'chinbold'];
+try { localStorage.removeItem('se_cheat_exempt_names'); } catch {}
 const isCheatExempt = (name) => {
   const normalized = (name || '').trim().toLowerCase();
-  return getCheatExemptNames().some(e => {
+  return CHEAT_EXEMPT_NAMES.some(e => {
     if (!e) return false;
     return normalized === e || normalized.startsWith(e + ' ');
   });
@@ -2479,11 +2472,7 @@ function TeacherLogin({ onLogin }) {
 function SettingsModal({ apiKey, onSave, onClose, title }) {
   const [key, setKey] = useState(apiKey || '');
   const [show, setShow] = useState(false);
-  const [exemptNames, setExemptNames] = useState(() => {
-    try { return localStorage.getItem(SE_CHEAT_EXEMPT_KEY) ?? DEFAULT_CHEAT_EXEMPT; } catch { return DEFAULT_CHEAT_EXEMPT; }
-  });
   const handleSave = () => {
-    try { localStorage.setItem(SE_CHEAT_EXEMPT_KEY, exemptNames.trim()); } catch {}
     onSave(key.trim());
     onClose();
   };
@@ -2510,20 +2499,6 @@ function SettingsModal({ apiKey, onSave, onClose, title }) {
             </div>
             <div className="form-hint">AI задлах / асуулт үүсгэхэд хэрэгтэй. Зөвхөн энэ session-д хадгалагдана.</div>
           </div>
-          {!title && (
-          <div className="form-group" style={{marginTop:16}}>
-            <label className="form-label">Чит темдэглэхгүй сурагчдын нэр</label>
-            <input
-              className="form-input"
-              placeholder="жн: enhbat,chinbold"
-              value={exemptNames}
-              onChange={e => setExemptNames(e.target.value)}
-            />
-            <div style={{fontSize:'0.78rem',color:'var(--text3)',marginTop:5}}>
-              Таслалаар тусгаарлана. Жагсаалтад орсон сурагч шалгалт өгөхөд чит бүртгэгдэхгүй бөгөөд дэлгэц дээр харагдахгүй.
-            </div>
-          </div>
-          )}
         </div>
         <div className="modal-foot">
           <button className="btn btn-outline" onClick={onClose}>Болих</button>
