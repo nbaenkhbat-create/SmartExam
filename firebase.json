@@ -1,4 +1,15 @@
 {
+  "auth": {
+    "providers": {
+      "anonymous": true,
+      "emailPassword": true
+    },
+    "authorizedDomains": [
+      "localhost",
+      "cuee-93e28.firebaseapp.com",
+      "cuee-93e28.web.app"
+    ]
+  },
   "database": {
     "rules": "database.rules.json"
   },

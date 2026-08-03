@@ -1175,20 +1175,25 @@ const fmtDur = (sec) => {
 // Default Firebase config is embedded in code (no manual setup needed).
 // You can still override it by setting localStorage key: se_firebase_config
 const FIREBASE_DEFAULT_CONFIG = {
-  apiKey: "AIzaSyAYewyWCkgMiPhZlybGaDA3J6XAXeYxVvM",
-  authDomain: "smrtexm.firebaseapp.com",
-  projectId: "smrtexm",
-  storageBucket: "smrtexm.firebasestorage.app",
-  messagingSenderId: "1085014532833",
-  appId: "1:1085014532833:web:e9ca4fe4e00bbb30750da0",
-  measurementId: "G-YJC8GK38PB",
-  databaseURL: "https://smrtexm-default-rtdb.asia-southeast1.firebasedatabase.app"
+  apiKey: "AIzaSyBO18OgfofDR181gCYKJwQcvJvtB1gxPnU",
+  authDomain: "cuee-93e28.firebaseapp.com",
+  projectId: "cuee-93e28",
+  storageBucket: "cuee-93e28.firebasestorage.app",
+  messagingSenderId: "261582018432",
+  appId: "1:261582018432:web:4c8f5fed2717a6e54e9365",
+  measurementId: "G-WZWE66KMNC",
+  databaseURL: "https://cuee-93e28-default-rtdb.firebaseio.com"
 };
 
 const getFirebaseConfig = () => {
   try {
     const raw = localStorage.getItem('se_firebase_config');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.apiKey && parsed.projectId && (parsed.databaseURL || parsed.databaseUrl) && parsed.authDomain) {
+        return parsed;
+      }
+    }
   } catch {}
   return FIREBASE_DEFAULT_CONFIG;
 };
@@ -1204,10 +1209,14 @@ const getFirebaseApp = (() => {
     if (!cfg) return null;
     const fixed = { ...cfg, databaseURL: cfg.databaseURL || cfg.databaseUrl };
     try {
-      app = firebase.initializeApp(fixed, 'smartExam');
+      if (firebase.apps && firebase.apps.length) {
+        app = firebase.app();
+        return app;
+      }
+      app = firebase.initializeApp(fixed);
       return app;
     } catch (e) {
-      try { app = firebase.app('smartExam'); return app; } catch { return null; }
+      try { app = firebase.app(); return app; } catch { return null; }
     }
   };
 })();
@@ -2318,10 +2327,6 @@ function TeacherLogin({ onLogin }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [apiKey, setApiKey] = useState(() => {
-    try { return sessionStorage.getItem('se_apikey') || localStorage.getItem('se_apikey') || ''; } catch { return ''; }
-  });
-  const [showKey, setShowKey] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -2339,15 +2344,12 @@ function TeacherLogin({ onLogin }) {
       } else {
         user = await teacherSignIn(email, password);
       }
-      if (apiKey) {
-        try { sessionStorage.setItem('se_apikey', apiKey); localStorage.removeItem('se_apikey'); } catch {}
-      }
       const display = sanitizeText(user.displayName || name.trim() || email.split('@')[0], 80);
       try {
         localStorage.setItem(SE_TEACHER, display);
         if (window.SESecurity) SESecurity.saveTeacherMeta({ uid: user.uid, email: user.email, displayName: display });
       } catch {}
-      onLogin(display, (apiKey || '').trim(), user);
+      onLogin(display, user);
     } catch (e) {
       const code = e?.code || '';
       if (code === 'auth/email-already-in-use') setErr('Энэ имэйл бүртгэлтэй байна — нэвтэрнэ үү');
@@ -2356,6 +2358,7 @@ function TeacherLogin({ onLogin }) {
       else if (code === 'auth/user-not-found') setErr('Бүртгэл олдсонгүй — эхлээд бүртгүүлнэ үү');
       else if (code === 'auth/weak-password') setErr('Нууц үг хэт сул байна');
       else if (code === 'auth/operation-not-allowed') setErr('Firebase Console-д Email/Password Auth идэвхжүүлнэ үү');
+      else if (code === 'auth/configuration-not-found') setErr('Firebase Authentication идэвхгүй байна. Console → Authentication → Email/Password идэвхжүүлнэ үү');
       else setErr(e?.message || 'Нэвтрэхэд алдаа');
     } finally {
       setBusy(false);
@@ -2400,19 +2403,7 @@ function TeacherLogin({ onLogin }) {
               <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowPass(s => !s)}>{showPass ? '🙈' : '👁'}</button>
             </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Groq API түлхүүр <span style={{fontWeight:400,textTransform:'none'}}>(сонголттой · session only)</span></label>
-            <div style={{display:'flex',gap:8}}>
-              <input className="form-input" type={showKey ? 'text' : 'password'} placeholder="gsk_..."
-                value={apiKey} onChange={e => setApiKey(e.target.value)} style={{flex:1}} />
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowKey(s => !s)}>{showKey ? '🙈' : '👁'}</button>
-            </div>
-            <div className="form-hint">API түлхүүр localStorage-д хадгалагдахгүй — зөвхөн энэ session</div>
-          </div>
           {err && <div className="form-error">⚠ {err}</div>}
-          <div style={{marginTop:10,padding:'10px 12px',background:'var(--amber-light)',borderRadius:8,fontSize:'0.78rem',color:'#92400e',lineHeight:1.45}}>
-            🔒 Шалгалтын өрөө зөвхөн таны Firebase бүртгэлтэй холбогдоно. Сурагчид хариултын түлхүүрийг унших боломжгүй.
-          </div>
         </div>
         <div className="modal-foot">
           <button className="btn btn-primary btn-lg" onClick={handle} disabled={busy}>
@@ -2425,7 +2416,7 @@ function TeacherLogin({ onLogin }) {
 }
 
 // ─── SETTINGS MODAL ───────────────────────────────────────────────────────────
-function SettingsModal({ apiKey, onSave, onClose }) {
+function SettingsModal({ apiKey, onSave, onClose, title }) {
   const [key, setKey] = useState(apiKey || '');
   const [show, setShow] = useState(false);
   const [exemptNames, setExemptNames] = useState(() => {
@@ -2440,7 +2431,7 @@ function SettingsModal({ apiKey, onSave, onClose }) {
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-head">
-          <div style={{fontFamily:'Outfit',fontWeight:800,fontSize:'1.1rem'}}>⚙ Тохиргоо</div>
+          <div style={{fontFamily:'Outfit',fontWeight:800,fontSize:'1.1rem'}}>{title || '⚙ Тохиргоо'}</div>
         </div>
         <div className="modal-body">
           <div className="form-group">
@@ -2453,10 +2444,13 @@ function SettingsModal({ apiKey, onSave, onClose }) {
                 value={key}
                 onChange={e => setKey(e.target.value)}
                 style={{flex:1}}
+                autoFocus
               />
               <button className="btn btn-outline btn-sm" onClick={() => setShow(s => !s)}>{show ? '🙈' : '👁'}</button>
             </div>
+            <div className="form-hint">AI задлах / асуулт үүсгэхэд хэрэгтэй. Зөвхөн энэ session-д хадгалагдана.</div>
           </div>
+          {!title && (
           <div className="form-group" style={{marginTop:16}}>
             <label className="form-label">Чит темдэглэхгүй сурагчдын нэр</label>
             <input
@@ -2469,10 +2463,11 @@ function SettingsModal({ apiKey, onSave, onClose }) {
               Таслалаар тусгаарлана. Жагсаалтад орсон сурагч шалгалт өгөхөд чит бүртгэгдэхгүй бөгөөд дэлгэц дээр харагдахгүй.
             </div>
           </div>
+          )}
         </div>
         <div className="modal-foot">
           <button className="btn btn-outline" onClick={onClose}>Болих</button>
-          <button className="btn btn-primary" onClick={handleSave}>Хадгалах</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!key.trim() && !!title}>Хадгалах</button>
         </div>
       </div>
     </div>
@@ -2480,7 +2475,7 @@ function SettingsModal({ apiKey, onSave, onClose }) {
 }
 
 // ─── AI PARSE STEP ─────────────────────────────────────────────────────────────
-function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVariantCountChange, currentVariantLabel }) {
+function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVariantCountChange, currentVariantLabel, onNeedApiKey }) {
   const [raw, setRaw] = useState('');
   const [parsing, setParsing] = useState(false);
   const [err, setErr] = useState('');
@@ -2488,7 +2483,7 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
 
   const doParse = async () => {
     if (!raw.trim()) return;
-    if (!apiKey) { setErr('API түлхүүр байхгүй. Тохиргоо→ API key оруулна уу.'); return; }
+    if (!apiKey) { onNeedApiKey?.(); return; }
     setParsing(true); setErr('');
     try {
       const qs = await parseTestWithAI(raw, apiKey);
@@ -2521,9 +2516,6 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
           <strong>AI задлан шинжилгээ</strong> — Тестийн текстийг paste хийнэ үү.
         </div>
       </div>
-      {!apiKey && (
-        <div className="apikey-banner">⚠️ API түлхүүр оруулаагүй — AI ажиллахгүй.</div>
-      )}
       {parsing ? (
         <div className="parsing-overlay">
           <div className="spinner"></div>
@@ -2541,7 +2533,7 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
             <button className="btn btn-outline" onClick={onBack}>← Буцах</button>
             <div style={{display:'flex',gap:10}}>
               <button className="btn btn-outline" onClick={onManual}>✏ Гараар</button>
-              <button className="btn btn-violet" onClick={doParse} disabled={!raw.trim() || !apiKey}>✨ AI задлах</button>
+              <button className="btn btn-violet" onClick={doParse} disabled={!raw.trim()}>✨ AI задлах</button>
             </div>
           </div>
         </>
@@ -2551,7 +2543,7 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
 }
 
 // ─── AI QUESTION GENERATOR ────────────────────────────────────────────────────
-function AIQuestionGenerator({ apiKey, subject, format, onGenerated, onBack }) {
+function AIQuestionGenerator({ apiKey, subject, format, onGenerated, onBack, onNeedApiKey }) {
   const profile = getSubjectProfile(subject) || SUBJECT_PROFILES[0];
   const allowedTypes = AI_Q_TYPES.filter(t => (profile.qTypes || ['mcq']).includes(t.id));
   const [qType, setQType] = useState(allowedTypes[0]?.id || 'mcq');
@@ -2563,7 +2555,7 @@ function AIQuestionGenerator({ apiKey, subject, format, onGenerated, onBack }) {
 
   const doGenerate = async () => {
     if (!topic.trim()) { setErr('Сэдэв оруулна уу'); return; }
-    if (!apiKey) { setErr('Groq API түлхүүр шаардлагатай'); return; }
+    if (!apiKey) { onNeedApiKey?.(); return; }
     setBusy(true); setErr(''); setPreview(null);
     try {
       const qs = await generateQuestionsWithAI({
@@ -2618,7 +2610,7 @@ function AIQuestionGenerator({ apiKey, subject, format, onGenerated, onBack }) {
       ) : (
         <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
           {onBack && <button className="btn btn-outline" onClick={onBack}>← Буцах</button>}
-          <button className="btn btn-violet btn-lg" onClick={doGenerate} disabled={!apiKey || !topic.trim()}>
+          <button className="btn btn-violet btn-lg" onClick={doGenerate} disabled={!topic.trim()}>
             ✨ Асуулт үүсгэх
           </button>
         </div>
@@ -2770,7 +2762,7 @@ function QuestionEditor({ questions, onChange, defaultType = 'mcq', subjectFeatu
 }
 
 // ─── CREATE EXAM (3-step wizard) ──────────────────────────────────────────────
-function CreateExam({ apiKey, onSave, onCancel }) {
+function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
   const [step, setStep] = useState(1);
   const [info, setInfo] = useState({
     title: '', subject: '', subjectId: '', duration: 45, passingScore: 60,
@@ -2784,9 +2776,20 @@ function CreateExam({ apiKey, onSave, onCancel }) {
   const [inlineRaw, setInlineRaw] = useState('');
   const [inlineParsing, setInlineParsing] = useState(false);
   const [inlineErr, setInlineErr] = useState('');
+  const [showApiModal, setShowApiModal] = useState(false);
+  const [localApiKey, setLocalApiKey] = useState(apiKey || '');
   const variantCount = variants.length;
   const profile = getSubjectProfile(info.subjectId || info.subject);
   const stepLabels = ['Хичээл сонгох', 'Формат & загвар', 'Асуулт үүсгэх'];
+  const effectiveKey = localApiKey || apiKey || '';
+
+  useEffect(() => { setLocalApiKey(apiKey || ''); }, [apiKey]);
+
+  const saveApiKey = (k) => {
+    setLocalApiKey(k);
+    onApiKey?.(k);
+  };
+  const needApiKey = () => setShowApiModal(true);
 
   const selectSubject = (p) => {
     setInfo(prev => ({
@@ -2835,10 +2838,11 @@ function CreateExam({ apiKey, onSave, onCancel }) {
   };
 
   const doInlineParse = async () => {
-    if (!inlineRaw.trim() || !apiKey) return;
+    if (!inlineRaw.trim()) return;
+    if (!effectiveKey) { needApiKey(); return; }
     setInlineParsing(true); setInlineErr('');
     try {
-      const qs = await parseTestWithAI(inlineRaw, apiKey);
+      const qs = await parseTestWithAI(inlineRaw, effectiveKey);
       if (!Array.isArray(qs) || !qs.length) throw new Error('Асуулт илрэхгүй');
       setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v));
       setShowInlineAI(false); setInlineRaw('');
@@ -2921,6 +2925,14 @@ function CreateExam({ apiKey, onSave, onCancel }) {
 
   return (
     <div>
+      {showApiModal && (
+        <SettingsModal
+          apiKey={effectiveKey}
+          title="🔑 Groq API түлхүүр"
+          onSave={saveApiKey}
+          onClose={() => setShowApiModal(false)}
+        />
+      )}
       <div className="page-header">
         <h2 className="page-title">✏ Шалгалт үүсгэх</h2>
         <div className="page-sub">3 алхамт мастер · хичээлийн тусгай OMR формат</div>
@@ -3036,23 +3048,25 @@ function CreateExam({ apiKey, onSave, onCancel }) {
 
               {step3Mode === 'ai' && (
                 <AIQuestionGenerator
-                  apiKey={apiKey}
+                  apiKey={effectiveKey}
                   subject={info.subject}
                   format={info.omrFormat}
                   onGenerated={handleGenerated}
                   onBack={() => setStep(2)}
+                  onNeedApiKey={needApiKey}
                 />
               )}
 
               {step3Mode === 'parse' && (
                 <AIParseStep
-                  apiKey={apiKey}
+                  apiKey={effectiveKey}
                   onParsed={handleParsed}
                   onManual={handleManual}
                   onBack={() => setStep(2)}
                   variantCount={variantCount}
                   onVariantCountChange={addVariant}
                   currentVariantLabel={currentVariant.label || alpha(activeVar)}
+                  onNeedApiKey={needApiKey}
                 />
               )}
 
@@ -3067,9 +3081,10 @@ function CreateExam({ apiKey, onSave, onCancel }) {
                       </div>
                     </div>
                     <div style={{display:'flex',gap:8}}>
-                      {apiKey && (
-                        <button className="btn btn-outline btn-sm" onClick={() => setShowInlineAI(s => !s)}>✨ AI</button>
-                      )}
+                      <button className="btn btn-outline btn-sm" onClick={() => {
+                        if (!effectiveKey) { needApiKey(); return; }
+                        setShowInlineAI(s => !s);
+                      }}>✨ AI</button>
                       {variantCount < 5 && (
                         <button className="btn btn-sm" style={{background:'var(--violet)',color:'white'}} onClick={goNextVariant}>
                           ➕ Хувилбар
@@ -3568,7 +3583,7 @@ function CheatDetailModal({ sub, onClose }) {
 }
 
 
-function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onCheatClose, apiKey }) {
+function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onCheatClose, apiKey, onApiKey }) {
   const classOptions = useMemo(
     () => [...new Set(allSubs.map(s => (s.studentClass || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'mn')),
     [allSubs]
@@ -3579,6 +3594,11 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState('');
   const [verifiedSubs, setVerifiedSubs] = useState(null);
+  const [showApiModal, setShowApiModal] = useState(false);
+  const [localApiKey, setLocalApiKey] = useState(apiKey || '');
+  const effectiveKey = localApiKey || apiKey || '';
+
+  useEffect(() => { setLocalApiKey(apiKey || ''); }, [apiKey]);
 
   useEffect(() => {
     if (classOptions.length === 0) setClassFilter('all');
@@ -3592,12 +3612,14 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
     return allSubs.filter(s => (s.studentClass || '').trim() === classFilter);
   }, [allSubs, classFilter]);
 
-  const runAiAnalysis = async () => {
+  const runAiAnalysis = async (keyOverride) => {
+    const key = keyOverride !== undefined ? keyOverride : effectiveKey;
     const list = verifiedSubs || subs;
     if (!list.length) { setAiErr('Шинжлэх дүн алга'); return; }
+    if (!key) { setShowApiModal(true); return; }
     setAiBusy(true); setAiErr('');
     try {
-      const result = await analyzeExamWithAI({ apiKey, exam, subs: list });
+      const result = await analyzeExamWithAI({ apiKey: key, exam, subs: list });
       setAiAnalysis(result);
     } catch (e) {
       setAiErr(e?.message || 'Анализ алдаа');
@@ -3667,6 +3689,18 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
 
   return (
     <div>
+      {showApiModal && (
+        <SettingsModal
+          apiKey={effectiveKey}
+          title="🔑 Groq API түлхүүр"
+          onSave={(k) => {
+            setLocalApiKey(k);
+            onApiKey?.(k);
+            runAiAnalysis(k);
+          }}
+          onClose={() => setShowApiModal(false)}
+        />
+      )}
       <div className="page-header">
         <div style={{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
           <button className="btn btn-ghost btn-sm" onClick={onBack}>← Буцах</button>
@@ -3734,8 +3768,8 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
             <div className="ai-analysis-title">
               🧠 AI Анализ — Сул талыг олж харах
               <span className="badge badge-green" style={{fontWeight:600,fontSize:'0.7rem'}}>🔒 verified dүн</span>
-              <button className="btn btn-violet btn-sm" style={{marginLeft:'auto'}} onClick={runAiAnalysis} disabled={aiBusy || !displaySubs.length}>
-                {aiBusy ? '⏳ ...' : apiKey ? '✨ AI зөвлөмж шинэчлэх' : '📊 График шинэчлэх'}
+              <button className="btn btn-violet btn-sm" style={{marginLeft:'auto'}} onClick={() => runAiAnalysis()} disabled={aiBusy || !displaySubs.length}>
+                {aiBusy ? '⏳ ...' : '✨ AI зөвлөмж шинэчлэх'}
               </button>
             </div>
             {aiErr && <div className="form-error" style={{marginBottom:10}}>⚠ {aiErr}</div>}
@@ -3763,7 +3797,7 @@ function ExamResultsView({ exam, allSubs, onBack, onCheatClick, cheatSub, onChea
               </>
             )}
             {!aiAnalysis && !aiBusy && (
-              <div style={{fontSize:'0.85rem',color:'var(--text2)'}}>Дүн ирэхэд автоматаар сул сэдвийг тооцно. Groq key-тэй бол дэлгэрэнгүй зөвлөмж авна.</div>
+              <div style={{fontSize:'0.85rem',color:'var(--text2)'}}>Дүн ирэхэд автоматаар сул сэдвийг тооцно. AI зөвлөмж авахдаа Groq API түлхүүр асууна.</div>
             )}
           </div>
         )}
@@ -3906,6 +3940,7 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
         exam={view.exam}
         allSubs={allSubs}
         apiKey={apiKeyState || apiKey}
+        onApiKey={k => { setApiKeyState(k); onApiKey(k); try { sessionStorage.setItem('se_apikey', k); localStorage.removeItem('se_apikey'); } catch {} }}
         onBack={() => setView(null)}
         onCheatClick={setCheatSub}
         cheatSub={cheatSub}
@@ -3946,7 +3981,7 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
       {showSettings && (
         <SettingsModal
           apiKey={apiKeyState}
-          onSave={k => { setApiKeyState(k); onApiKey(k); localStorage.setItem('se_apikey', k); }}
+          onSave={k => { setApiKeyState(k); onApiKey(k); try { sessionStorage.setItem('se_apikey', k); localStorage.removeItem('se_apikey'); } catch {} }}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -3993,13 +4028,6 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
       </div>
 
       <div className="container-lg">
-        {!apiKey && (
-          <div className="apikey-banner">
-            ⚠️ Groq API түлхүүр оруулаагүй тул AI задлан шинжилгээ / асуулт үүсгэх ажиллахгүй.
-            <button className="btn btn-outline btn-sm" onClick={() => setShowSettings(true)}>Оруулах</button>
-          </div>
-        )}
-
         <div className="stats-strip">
           <div className="stat-card"><div className="stat-val">{exams.length}</div><div className="stat-lbl">Нийт тест</div></div>
           <div className="stat-card"><div className="stat-val">{submissions.length}</div><div className="stat-lbl">Нийт дүн</div></div>
@@ -5367,7 +5395,10 @@ function QRStudentLogin({ exam, qrClassName, onStart, onBack }) {
 function App() {
   const [exams, setExams] = useLS('se_exams', []);
   const [submissions, setSubmissions] = useLS('se_submissions', []);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('se_apikey') || '');
+  const [apiKey, setApiKey] = useState(() => {
+    try { return sessionStorage.getItem('se_apikey') || ''; } catch { return ''; }
+  });
+  try { localStorage.removeItem('se_apikey'); } catch {}
   const [qrExam, setQrExam] = useState(null); // exam loaded from QR URL
 
   const [page, setPage] = useState({ type: 'landing' });
@@ -5572,11 +5603,7 @@ function App() {
         <>
           <LandingPage onSelect={() => {}} />
           <TeacherLogin
-            onLogin={(name, key) => {
-              if (key) {
-                setApiKey(key);
-                try { sessionStorage.setItem('se_apikey', key); localStorage.removeItem('se_apikey'); } catch {}
-              }
+            onLogin={(name) => {
               try { localStorage.setItem(SE_TEACHER, name); } catch {}
               setPage({ type: 'teacherDash', name });
               history.replaceState({ se: 'teacher' }, '', appUrlWithHash('teacher'));
@@ -5619,6 +5646,7 @@ function App() {
           <div className="container-sm" style={{paddingTop:8, paddingBottom:40}}>
             <CreateExam
               apiKey={apiKey}
+              onApiKey={k => { setApiKey(k); try { sessionStorage.setItem('se_apikey', k); localStorage.removeItem('se_apikey'); } catch {} }}
               onSave={exam => {
                 setExams(e => [...e, exam]);
                 setPage({ type: 'teacherDash', name: page.name });
