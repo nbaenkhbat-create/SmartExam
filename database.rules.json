@@ -6,7 +6,7 @@
     "activeRooms": {
       "$roomId": {
         ".read": "auth != null && (data.child('ownerUid').val() == auth.uid || data.child('publicReadable').val() == true)",
-        ".write": "auth != null && data.exists() && !newData.exists() && data.child('ownerUid').val() == auth.uid",
+        ".write": "auth != null && ((!data.exists() && newData.child('ownerUid').val() == auth.uid && newData.hasChildren(['roomID', 'title', 'ownerUid'])) || (data.exists() && !newData.exists() && data.child('ownerUid').val() == auth.uid))",
 
         "ownerUid": {
           ".write": "auth != null && ((!data.exists() && newData.val() == auth.uid) || (data.exists() && data.val() == auth.uid && newData.val() == auth.uid))",

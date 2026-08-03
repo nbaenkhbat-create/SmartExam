@@ -14,9 +14,10 @@
 ```bash
 cd GIT
 npx -y firebase-tools@latest login
-npx -y firebase-tools@latest use smrtexm
+npx -y firebase-tools@latest use cuee-93e28
 
 # 1) Auth: Console → Authentication → Sign-in method → Email/Password + Anonymous идэвхжүүл
+#    (эсвэл: firebase deploy --only auth)
 
 # 2) Rules
 npx -y firebase-tools@latest deploy --only database
