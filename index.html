@@ -1313,41 +1313,41 @@ const unpackQuestions = (questions) => {
 const SUBJECT_PROFILES = [
   { id: 'chemistry', name: 'Хими', icon: '🧪', color: '#059669', omrMode: 'mcq', features: ['image'],
     formats: [
-      { id: 'mcq', label: 'Зурагтай A–D', desc: 'Диаграмм/зураг + 4 сонголттой OMR' }
+      { id: 'mcq', label: 'Image + A–D', desc: 'Diagram/image with 4-choice OMR' }
     ], qTypes: ['image', 'mcq', 'compare'] },
   { id: 'biology', name: 'Биологи', icon: '🧬', color: '#10b981', omrMode: 'mcq', features: ['image'],
     formats: [
-      { id: 'mcq', label: 'Зурагтай A–D', desc: 'Эсийн бүтэц гэх мэт зураг + 4 сонголт' }
+      { id: 'mcq', label: 'Image + A–D', desc: 'Cell structure etc. image + 4 choices' }
     ], qTypes: ['image', 'mcq', 'compare'] },
   { id: 'math', name: 'Математик', icon: '📐', color: '#3b5bdb', omrMode: 'grid', features: ['grid'],
     formats: [
-      { id: 'mcq', label: 'A–D сонголт', desc: 'Олон сонголттой стандарт формат' },
-      { id: 'grid', label: 'Grid-in (тоон)', desc: '3 баганат 0–9 тоогоор хариу будах' }
+      { id: 'mcq', label: 'A–D Multiple Choice', desc: 'Standard multiple-choice format' },
+      { id: 'grid', label: 'Grid-in (Numeric)', desc: '3-column 0–9 numeric answer grid' }
     ], qTypes: ['calc', 'mcq'] },
   { id: 'physics', name: 'Физик', icon: '⚡', color: '#0891b2', omrMode: 'grid', features: ['grid', 'unit'],
     formats: [
-      { id: 'mcq', label: 'A–D сонголт', desc: 'Тооцоололтой олон сонголт' },
-      { id: 'grid', label: 'Grid-in + нэгж', desc: 'Тоон хариу + физикийн нэгж' }
+      { id: 'mcq', label: 'A–D Multiple Choice', desc: 'Calculation-based multiple choice' },
+      { id: 'grid', label: 'Grid-in + Unit', desc: 'Numeric answer with physics unit' }
     ], qTypes: ['calc', 'mcq'] },
   { id: 'mongolian', name: 'Монгол хэл', icon: '📖', color: '#d97706', omrMode: 'tf', features: ['source'],
     formats: [
-      { id: 'tf', label: 'Зөв / Буруу', desc: 'Эх текст + Үнэн/Худал OMR' },
-      { id: 'mcq', label: 'A–D сонголт', desc: 'Уламжлалт олон сонголт' }
+      { id: 'tf', label: 'True / False', desc: 'Source text + True/False OMR' },
+      { id: 'mcq', label: 'A–D Multiple Choice', desc: 'Traditional multiple choice' }
     ], qTypes: ['mcq', 'compare'] },
   { id: 'social', name: 'Нигэм', icon: '🏛', color: '#ca8a04', omrMode: 'tf', features: ['source'],
     formats: [
-      { id: 'tf', label: 'Үнэн / Худал', desc: 'Сурвалж текст + True/False' },
-      { id: 'mcq', label: 'A–D сонголт', desc: 'Олон сонголттой асуулт' }
+      { id: 'tf', label: 'True / False', desc: 'Source text + True/False' },
+      { id: 'mcq', label: 'A–D Multiple Choice', desc: 'Multiple-choice questions' }
     ], qTypes: ['mcq', 'compare'] },
   { id: 'russian', name: 'Орос хэл', icon: '🎧', color: '#7c3aed', omrMode: 'mcq', features: ['audio'],
     formats: [
-      { id: 'mcq', label: 'Сонсгол + A–D', desc: 'Аудио тоглуулагч + сонголт' },
-      { id: 'blank', label: 'Сул орон нөхөх', desc: 'Дүрмийн/үгийн сонголт' }
+      { id: 'mcq', label: 'Listening + A–D', desc: 'Audio player + multiple choice' },
+      { id: 'blank', label: 'Fill in the Blank', desc: 'Grammar / vocabulary blanks' }
     ], qTypes: ['mcq', 'blank'] },
   { id: 'english', name: 'Англи хэл', icon: '🔤', color: '#db2777', omrMode: 'mcq', features: ['audio'],
     formats: [
-      { id: 'mcq', label: 'Grammar A–D', desc: 'Дүрмийн сонголт + аудио' },
-      { id: 'blank', label: 'Fill-in blank', desc: 'Сул орон зай нөхөх' }
+      { id: 'mcq', label: 'Grammar A–D', desc: 'Grammar choices + audio' },
+      { id: 'blank', label: 'Fill in the Blank', desc: 'Complete the blank spaces' }
     ], qTypes: ['mcq', 'blank'] }
 ];
 
@@ -2039,7 +2039,12 @@ const registerExamClass = async (examId, className) => {
 };
 
 // ─── AI PARSER (Groq) ─────────────────────────────────────────────────────────
-const GROQ_AI_MODEL = 'qwen/qwen3.6-27b';
+const GROQ_AI_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'qwen/qwen3-32b'
+];
+const GROQ_AI_MODEL = GROQ_AI_MODELS[0];
 const GROQ_AI_BUSY_MSG = 'AI систем ачаалалтай байна, түр хүлээгээд дахин оролдоно уу';
 
 const getGroqUserError = (status, apiMessage) => {
@@ -2055,98 +2060,148 @@ const reportGroqError = (userMessage) => {
   if (userMessage === GROQ_AI_BUSY_MSG) alert(userMessage);
 };
 
-const parseTestWithAI = async (rawText, apiKey) => {
-  const sys = `You are an exam question parser. Parse the multiple-choice questions from the given text and return ONLY a valid JSON array. Nothing else — no markdown, no explanation, just the JSON array.
+/** Strip thinking tags / markdown and pull JSON array or object from model text */
+const extractJsonPayload = (raw) => {
+  let text = String(raw || '');
+  text = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<\/?think>/gi, '')
+    .replace(/```(?:json)?\s*/gi, '')
+    .replace(/```/g, '')
+    .trim();
+  if (!text) throw new Error('empty');
+  try { return JSON.parse(text); } catch {}
+  const arrStart = text.indexOf('[');
+  const objStart = text.indexOf('{');
+  const start = (arrStart === -1) ? objStart
+    : (objStart === -1) ? arrStart
+    : Math.min(arrStart, objStart);
+  if (start < 0) throw new Error('no-json');
+  const open = text[start];
+  const close = open === '[' ? ']' : '}';
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let end = -1;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (ch === '\\') { esc = true; continue; }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end < 0) throw new Error('unclosed');
+  return JSON.parse(text.slice(start, end + 1));
+};
 
-Schema for each item:
-{
-  "id": <number, 1-based>,
-  "text": "<question text, use ________ for blanks>",
-  "options": [
-    {"key": "A", "text": "<option text>"},
-    {"key": "B", "text": "<option text>"},
-    {"key": "C", "text": "<option text>"},
-    {"key": "D", "text": "<option text>"}
-  ],
-  "answer": "<correct key letter like A/B/C/D, or null if not marked>"
-}
+const normalizeAiQuestions = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.questions)) return payload.questions;
+  if (payload && Array.isArray(payload.items)) return payload.items;
+  if (payload && Array.isArray(payload.data)) return payload.data;
+  throw new Error('not-array');
+};
+
+const groqRequest = async (apiKey, { systemPrompt, userPrompt, maxTokens = 4096, jsonObject = false }) => {
+  let lastErr = null;
+  for (const model of GROQ_AI_MODELS) {
+    const body = {
+      model,
+      temperature: 0.2,
+      max_tokens: maxTokens,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ]
+    };
+    if (jsonObject) body.response_format = { type: 'json_object' };
+    if (model.startsWith('qwen/')) body.reasoning_effort = 'none';
+
+    let response;
+    try {
+      response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body)
+      });
+    } catch {
+      lastErr = new Error(GROQ_AI_BUSY_MSG);
+      continue;
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const userMessage = getGroqUserError(response.status, err.error?.message);
+      lastErr = new Error(userMessage);
+      // try next model on decommission / not found
+      if (response.status === 404 || /decommission|not found|model/i.test(err.error?.message || '')) continue;
+      reportGroqError(userMessage);
+      throw lastErr;
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim() || '';
+    if (!text) {
+      lastErr = new Error(GROQ_AI_BUSY_MSG);
+      continue;
+    }
+    return text;
+  }
+  reportGroqError(lastErr?.message || GROQ_AI_BUSY_MSG);
+  throw lastErr || new Error(GROQ_AI_BUSY_MSG);
+};
+
+const parseTestWithAI = async (rawText, apiKey) => {
+  const sys = `You are an exam question parser. Parse the multiple-choice questions from the given text and return ONLY valid JSON (no markdown, no explanation).
+
+Return a JSON object with this exact shape:
+{"questions":[
+  {
+    "id": <number, 1-based>,
+    "text": "<question text, use ________ for blanks>",
+    "options": [
+      {"key": "A", "text": "<option text>"},
+      {"key": "B", "text": "<option text>"},
+      {"key": "C", "text": "<option text>"},
+      {"key": "D", "text": "<option text>"}
+    ],
+    "answer": "<correct key letter like A/B/C/D, or null if not marked>"
+  }
+]}
 
 Rules:
 - Normalize any format to the schema above
 - Clean up whitespace and formatting
 - If a question has a marked answer (asterisk, ✓, (correct), etc.), capture it
 - Always include exactly 4 options per question; if missing, create plausible distractors
-- Return ONLY the JSON array`;
+- The response MUST be a JSON object with a "questions" array`;
 
-  let response;
+  const text = await groqRequest(apiKey, {
+    systemPrompt: sys,
+    userPrompt: rawText,
+    maxTokens: 8192,
+    jsonObject: true
+  });
   try {
-    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: GROQ_AI_MODEL,
-        max_tokens: 4096,
-        messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: rawText }
-        ]
-      })
-    });
-  } catch {
-    reportGroqError(GROQ_AI_BUSY_MSG);
-    throw new Error(GROQ_AI_BUSY_MSG);
-  }
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const userMessage = getGroqUserError(response.status, err.error?.message);
-    reportGroqError(userMessage);
-    throw new Error(userMessage);
-  }
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content?.trim() || '';
-  const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-  try {
-    return JSON.parse(clean);
+    return normalizeAiQuestions(extractJsonPayload(text));
   } catch {
     throw new Error('AI хариултыг JSON болгон задлахад алдаа гарлаа. Дахин оролдоно уу.');
   }
 };
 
 const groqChat = async (apiKey, systemPrompt, userPrompt, maxTokens = 4096) => {
-  let response;
-  try {
-    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: GROQ_AI_MODEL,
-        max_tokens: maxTokens,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ]
-      })
-    });
-  } catch {
-    reportGroqError(GROQ_AI_BUSY_MSG);
-    throw new Error(GROQ_AI_BUSY_MSG);
-  }
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    const userMessage = getGroqUserError(response.status, err.error?.message);
-    reportGroqError(userMessage);
-    throw new Error(userMessage);
-  }
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content?.trim() || '';
-  return text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+  return groqRequest(apiKey, { systemPrompt, userPrompt, maxTokens, jsonObject: false });
 };
 
 /** AI асуулт үүсгэгч — сэдэв + төрлөөр JSON асуулт үүсгэнэ */
@@ -2159,13 +2214,13 @@ const generateQuestionsWithAI = async ({ apiKey, subject, topic, qType, count = 
     blank: 'fill-in-the-blank grammar/vocabulary with options'
   }[qType] || 'multiple choice';
 
-  const schema = `Return ONLY a valid JSON array. Each item:
+  const schema = `Return ONLY a valid JSON object with shape {"questions":[...]}. Each item:
 {
   "id": <number>,
   "text": "<question in Mongolian or subject language>",
   "type": "mcq"|"tf"|"grid"|"blank",
   "topic": "<topic>",
-  "options": [{"key":"A","text":"..."}, ...],  // empty for grid; 2 opts for tf
+  "options": [{"key":"A","text":"..."}, ...],
   "answer": "<A|B|C|D or 3-digit for grid>",
   "sourceText": "<optional passage for Mongolian/Social>",
   "imageUrl": "",
@@ -2184,12 +2239,17 @@ Rules:
 - For tf: options A="Зөв / Үнэн", B="Буруу / Худал", answer A or B
 - For grid/calc: type="grid", numericAnswer 3 digits padded, answer same as numericAnswer, options=[]
 - For image: put [ЗУРАГ: brief description] in text
-- Return ONLY JSON array, no markdown`;
+- Return ONLY a JSON object with a "questions" array, no markdown`;
 
   const user = `Subject: ${subject}\nTopic: ${topic}\nQuestion type: ${qType}\nFormat: ${format}\nCount: ${count}\nGenerate ${count} questions now.`;
-  const clean = await groqChat(apiKey, sys, user, 4096);
+  const clean = await groqRequest(apiKey, {
+    systemPrompt: sys,
+    userPrompt: user,
+    maxTokens: 8192,
+    jsonObject: true
+  });
   let parsed;
-  try { parsed = JSON.parse(clean); } catch {
+  try { parsed = normalizeAiQuestions(extractJsonPayload(clean)); } catch {
     throw new Error('AI хариултыг JSON болгон задлахад алдаа гарлаа. Дахин оролдоно уу.');
   }
   if (!Array.isArray(parsed)) throw new Error('AI массив буцаасангүй');
@@ -2780,7 +2840,7 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
   const [localApiKey, setLocalApiKey] = useState(apiKey || '');
   const variantCount = variants.length;
   const profile = getSubjectProfile(info.subjectId || info.subject);
-  const stepLabels = ['Хичээл сонгох', 'Формат & загвар', 'Асуулт үүсгэх'];
+  const stepLabels = ['Хичээл сонгох', 'Format & template', 'Асуулт үүсгэх'];
   const effectiveKey = localApiKey || apiKey || '';
 
   useEffect(() => { setLocalApiKey(apiKey || ''); }, [apiKey]);
@@ -2921,7 +2981,7 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
   const currentVariant = variants[activeVar] || { label: alpha(activeVar), questions: [] };
   const currentQCount = (currentVariant.questions || []).filter(q => q.text).length;
   const totalQCount = variants.reduce((sum, v) => sum + (v.questions||[]).filter(q=>q.text).length, 0);
-  const formats = profile?.formats || [{ id: 'mcq', label: 'A–D', desc: 'Стандарт' }];
+  const formats = profile?.formats || [{ id: 'mcq', label: 'A–D Multiple Choice', desc: 'Standard format' }];
 
   return (
     <div>
@@ -2999,10 +3059,10 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
                 <span style={{fontSize:'1.5rem'}}>{profile?.icon}</span>
                 <div>
                   <div style={{fontFamily:'Outfit',fontWeight:800}}>{info.subject}</div>
-                  <div style={{fontSize:'0.8rem',color:'var(--text2)'}}>OMR загвар болон тестийн формат</div>
+                  <div style={{fontSize:'0.8rem',color:'var(--text2)'}}>OMR template and test format</div>
                 </div>
               </div>
-              <label className="form-label">Формат сонгох</label>
+              <label className="form-label">Select format</label>
               <div className="format-grid">
                 {formats.map(f => (
                   <button key={f.id} type="button"
@@ -3017,18 +3077,9 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
                   </button>
                 ))}
               </div>
-              <div style={{background:'var(--surface2)',borderRadius:12,padding:16,border:'1px solid var(--border)',marginBottom:16}}>
-                <div style={{fontWeight:700,marginBottom:8,fontSize:'0.85rem'}}>📋 OMR хуудасны урьдчилсан харагдац</div>
-                <div style={{fontSize:'0.82rem',color:'var(--text2)',lineHeight:1.6}}>
-                  {info.omrFormat === 'tf' && '• Эх текст хэсэг + «Зөв/Үнэн» | «Буруу/Худал» pill хэлбэрийн дугуй'}
-                  {info.omrFormat === 'grid' && '• A–D эсвэл 3 баганат 0–9 Grid-in тоон хариу'}
-                  {(info.omrFormat === 'mcq' || info.omrFormat === 'blank') && '• Стандарт A B C D дугуй · зураг/аудио дижитал шалгалтад'}
-                  <br/>• 4 өнцгийн хар маркер (Finder) — OpenCV warpPerspective
-                </div>
-              </div>
               <div style={{display:'flex',justifyContent:'space-between'}}>
-                <button className="btn btn-outline" onClick={() => setStep(1)}>← Буцах</button>
-                <button className="btn btn-primary" onClick={() => setStep(3)}>Дараах →</button>
+                <button className="btn btn-outline" onClick={() => setStep(1)}>← Back</button>
+                <button className="btn btn-primary" onClick={() => setStep(3)}>Next →</button>
               </div>
             </div>
           )}

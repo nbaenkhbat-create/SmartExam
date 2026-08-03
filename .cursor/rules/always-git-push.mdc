@@ -1,0 +1,14 @@
+---
+description: Always commit and push code changes to GitHub after edits
+alwaysApply: true
+---
+
+# Always push after code changes
+
+When you make any code update or modification in this project:
+
+1. Commit the relevant changes with a clear message (why, not just what).
+2. Immediately push to `origin` on the current branch (`git push -u origin HEAD` if needed).
+3. Do this without waiting for the user to ask “push хийсэн үү?” — push is required by default for this repo.
+4. Repo lives in the `GIT/` folder (`https://github.com/nbaenkhbat-create/SmartExam.git`).
+5. Still never force-push to main/master, never skip hooks, and never commit secrets (`.env`, API keys, credentials).
