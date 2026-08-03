@@ -2853,23 +2853,30 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
   };
 
   const addVariant = () => {
+    // Keep current variant (A) questions; append empty B/C/... and open same entry flow
+    if (variants.length >= 5) return;
+    const nextIdx = variants.length;
     setVariants(prev => {
       if (prev.length >= 5) return prev;
       return [...prev, { label: alpha(prev.length), questions: [] }];
     });
-    setActiveVar(v => Math.min(v + 1, 4));
-  };
-
-  const goNextVariant = () => {
-    const nextIdx = activeVar + 1;
-    if (nextIdx >= 5) return;
-    setVariants(prev => {
-      const cleared = prev.map((v, idx) => idx === activeVar ? { ...v, questions: [] } : v);
-      if (nextIdx >= cleared.length) return [...cleared, { label: alpha(nextIdx), questions: [] }];
-      return cleared.map((v, idx) => idx === nextIdx ? { ...v, questions: [] } : v);
-    });
     setActiveVar(nextIdx);
     setStep3Mode('ai');
+    setShowInlineAI(false);
+    setInlineRaw('');
+    setInlineErr('');
+  };
+
+  const goNextVariant = () => addVariant();
+
+  const selectVariantTab = (idx) => {
+    setActiveVar(idx);
+    const qs = variants[idx]?.questions || [];
+    const hasQs = qs.some(q => (q.text || '').trim());
+    setStep3Mode(hasQs ? 'manual' : 'ai');
+    setShowInlineAI(false);
+    setInlineRaw('');
+    setInlineErr('');
   };
 
   const doInlineParse = async () => {
@@ -3122,7 +3129,7 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
                   <div className="version-tab-strip">
                     {variants.map((v, idx) => (
                       <button key={idx} className={'version-tab' + (idx === activeVar ? ' active' : '')}
-                        onClick={() => setActiveVar(idx)}>
+                        onClick={() => selectVariantTab(idx)}>
                         {v.label || alpha(idx)}
                         <span className="vtab-count">{(v.questions||[]).filter(q=>q.text).length}</span>
                       </button>
