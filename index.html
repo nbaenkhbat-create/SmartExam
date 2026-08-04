@@ -1974,9 +1974,17 @@ const fetchExamRoomByCode = async (code) => {
   const db = getDb();
   if (!db) return Promise.reject(new Error('Интернет/Firebase холбогдоогүй. Дахин оролдоно уу.'));
   await ensureStudentAuth();
-  return roomRef(db, roomId).once('value').then(snap => {
-    const val = snap.val();
-    if (!val || !val.versions) {
+  const ref = roomRef(db, roomId);
+  // Students cannot read the whole room (answerKeys are owner-only), so fetch public fields only.
+  const fields = [
+    'roomID', 'title', 'subject', 'subjectId', 'duration', 'passingScore',
+    'omrFormat', 'omrMode', 'ownerUid', 'stopped', 'createdAt', 'versions', 'publicReadable'
+  ];
+  try {
+    const snaps = await Promise.all(fields.map(f => ref.child(f).once('value')));
+    const val = {};
+    fields.forEach((f, i) => { val[f] = snaps[i].val(); });
+    if (!val.versions) {
       throw new Error('Тестийн код олдсонгүй. Багшийн өгсөн кодыг яг хуулж оруулна уу.');
     }
     if (val.stopped) throw new Error('Энэ шалгалтыг багш зогсоосон байна.');
@@ -1994,9 +2002,14 @@ const fetchExamRoomByCode = async (code) => {
       stopped: !!val.stopped,
       versions: val.versions,
       createdAt: val.createdAt
-      // answerKeys intentionally omitted — never sent to student client from this path
     };
-  });
+  } catch (e) {
+    const msg = e?.message || String(e);
+    if (/PERMISSION_DENIED|permission.?denied/i.test(msg)) {
+      throw new Error('Шалгалт унших зөвшөөрөлгүй. Хуудсаа дахин ачааллаад QR-аа дахин уншуулна уу.');
+    }
+    throw e;
+  }
 };
 
 const announceStudentJoin = async (roomId, name, studentClass) => {
@@ -3512,22 +3525,23 @@ function ConfirmStopModal({ title, onCancel, onConfirm }) {
 
 function QRRoomLoader({ roomID, onLoaded, onBack }) {
   const [err, setErr] = useState('');
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
+
   useEffect(() => {
-    const db = getDb();
-    if (!db) { setErr('Firebase холболт алга'); return; }
-    try {
-      const ref = roomRef(db, roomID);
-      ref.once('value')
-        .then(snap => {
-          const val = snap.val();
-          if (!val || !val.versions) throw new Error('Room олдсонгүй');
-          onLoaded(val);
-        })
-        .catch(e => setErr(e.message || 'Алдаа'));
-    } catch(e) {
-      setErr(e.message || 'Алдаа');
-    }
-  }, [roomID, onLoaded]);
+    let cancelled = false;
+    setErr('');
+    (async () => {
+      try {
+        const room = await fetchExamRoomByCode(roomID);
+        if (cancelled) return;
+        onLoadedRef.current?.(room);
+      } catch (e) {
+        if (!cancelled) setErr(e?.message || 'Алдаа');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [roomID]);
 
   return (
     <div className="modal-overlay">
