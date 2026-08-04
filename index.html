@@ -2534,19 +2534,14 @@ function LandingPage({ onSelect }) {
         </p>
       </div>
       <div className="role-cards">
-        <button className="role-card teacher" onClick={() => onSelect('teacher')}>
+        <button className="role-card teacher" onClick={() => onSelect('teacher')} style={{maxWidth:360,margin:'0 auto'}}>
           <div className="role-icon">📝</div>
           <div className="role-title">Багш</div>
           <div className="role-desc">Тест үүсгэх, шалгалт зохион байгуулах, үр дүн дүгнэх</div>
         </button>
-        <button className="role-card student" onClick={() => onSelect('student')}>
-          <div className="role-icon">🎓</div>
-          <div className="role-title">Сурагч</div>
-          <div className="role-desc">Шалгалтад оролцох, хариулт бичих, дүн харах</div>
-        </button>
       </div>
       <p style={{marginTop:32,fontSize:'0.78rem',color:'var(--text3)'}}>
-        Сурагч: нэр, анги, багшийн тестийн кодоор шалгалтад орно
+        Сурагчид багшийн QR кодыг уншуулаад шалгалтад орно
       </p>
     </div>
   );
@@ -4322,21 +4317,6 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
                     <span>👥 {subs.length} оролцсон</span>
                     {avg !== null && <span>📊 Дундаж: <strong style={{color:'var(--text)'}}>{avg}%</strong></span>}
                   </div>
-                  <div style={{background:'var(--primary-light)',borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:'0.78rem',color:'var(--text2)',border:'1px solid #c7d2fe'}}>
-                    <div style={{fontWeight:700,color:'var(--primary)',marginBottom:6}}>🔑 Сурагчдын тестийн код</div>
-                    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                      <strong style={{fontFamily:'monospace',color:'var(--text)',fontSize:'0.82rem',wordBreak:'break-all',flex:1}}>{exam.id}</strong>
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigator.clipboard?.writeText(exam.id).then(() => alert('Код хуулагдлаа! Сурагчдад илгээнэ үү.')).catch(() => {});
-                        }}
-                      >📋 Хуулах</button>
-                    </div>
-                    <div style={{marginTop:6,fontSize:'0.72rem',color:'var(--text3)'}}>Сурагч: Нэр + Анги + энэ код → шалгалт</div>
-                  </div>
                   <div className="exam-card-actions">
                     <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); setView({type:'results', exam}); }}>📊 Үр дүн</button>
                     <button className="btn btn-violet btn-sm" onClick={(e) => { e.stopPropagation(); setQrExam(exam); }}>📱 QR код</button>
@@ -4832,108 +4812,6 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-// ─── STUDENT PORTAL ───────────────────────────────────────────────────────────
-function StudentPortal({ onStartExam, onBack }) {
-  const [name, setName] = useState(() => {
-    try { return localStorage.getItem('se_student_name') || ''; } catch { return ''; }
-  });
-  const [cls, setCls] = useState(() => {
-    try { return localStorage.getItem('se_student_class') || ''; } catch { return ''; }
-  });
-  const [code, setCode] = useState('');
-  const [err, setErr] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleStart = async () => {
-    if (!name.trim()) { setErr('Нэрээ оруулна уу'); return; }
-    if (!cls.trim()) { setErr('Ангиа оруулна уу (жн: 7а)'); return; }
-    if (!code.trim()) { setErr('Тестийн код оруулна уу'); return; }
-    setLoading(true);
-    setErr('');
-    try {
-      const roomExam = await fetchExamRoomByCode(code.trim());
-      try {
-        localStorage.setItem('se_student_name', name.trim());
-        localStorage.setItem('se_student_class', cls.trim());
-      } catch {}
-      announceStudentJoin(roomExam.roomID, name.trim(), cls.trim());
-      onStartExam(roomExam, name.trim(), cls.trim());
-    } catch (e) {
-      setErr(e.message || 'Алдаа гарлаа');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal" style={{ maxWidth: 440 }}>
-        <div className="modal-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: '1.4rem' }}>🎓</span>
-            <div>
-              <div style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: '1.1rem' }}>Сурагч — Шалгалтад орох</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>Нэр, анги, багшийн код</div>
-            </div>
-          </div>
-        </div>
-        <div className="modal-body">
-          <div style={{ background: 'var(--violet-light)', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: '0.85rem', color: '#4c3db0', lineHeight: 1.55 }}>
-            Багш танд <strong>тестийн код</strong> өгнө. Доор нэр, анги, кодоо бичээд шууд шалгалтаа эхэлнэ.
-          </div>
-          <div className="form-group">
-            <label className="form-label">Таны нэр</label>
-            <input
-              className="form-input"
-              placeholder="Бүтэн нэр"
-              value={name}
-              onChange={e => { setName(e.target.value); setErr(''); }}
-              autoFocus
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Анги</label>
-            <input
-              className="form-input"
-              placeholder="жн: 7а, 8б, 9а"
-              value={cls}
-              onChange={e => { setCls(e.target.value); setErr(''); }}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">🔑 Тестийн код (багшийн өгсөн)</label>
-            <input
-              className="form-input"
-              style={{ fontSize: '0.95rem', letterSpacing: 0.5, fontFamily: 'monospace' }}
-              placeholder="Кодыг хуулж тавина уу"
-              value={code}
-              onChange={e => { setCode(e.target.value); setErr(''); }}
-              onKeyDown={e => e.key === 'Enter' && !loading && handleStart()}
-            />
-          </div>
-          {err && <div className="form-error">⚠ {err}</div>}
-          {loading && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, color: 'var(--violet)' }}>
-              <div className="spinner" style={{ width: 22, height: 22, borderWidth: 3 }} />
-              <span style={{ fontWeight: 600 }}>Шалгалт ачаалж байна...</span>
-            </div>
-          )}
-        </div>
-        <div className="modal-foot">
-          <button className="btn btn-ghost" onClick={onBack} disabled={loading}>← Буцах</button>
-          <button
-            className="btn btn-violet btn-lg"
-            onClick={handleStart}
-            disabled={loading || !name.trim() || !cls.trim() || !code.trim()}
-          >
-            {loading ? '⏳ ...' : '▶ Шалгалтад орох'}
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -5867,7 +5745,6 @@ function App() {
         <>
           <LandingPage onSelect={role => {
             if (role === 'teacher') setPage({ type: 'teacherLogin' });
-            else setPage({ type: 'student' });
           }} />
         </>
       )}
@@ -5927,16 +5804,6 @@ function App() {
               onCancel={() => setPage({ type: 'teacherDash', name: page.name })}
             />
           </div>
-        </div>
-      )}
-
-      {page.type === 'student' && (
-        <div>
-          <Topbar onHome={goHome} />
-          <StudentPortal
-            onStartExam={(exam, name, cls) => startStudentExam(exam, name, cls)}
-            onBack={goHome}
-          />
         </div>
       )}
 
