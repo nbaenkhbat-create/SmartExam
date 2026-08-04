@@ -1641,45 +1641,76 @@ const studentVariantKey = (roomId, studentName) => {
   return (deviceId + '_' + roomId + '_' + (slug || 'anon')).slice(0, 120);
 };
 
-/** Тэнцүү хуваарилалт: 40 хүүхэд → 20 A, 20 B; 41 → 21 + 20 (сонголт random) */
-const assignBalancedVariant = (db, roomId, labels, studentName, classKey) => {
-  if (!labels.length) return Promise.resolve('A');
-  if (labels.length === 1) return Promise.resolve(labels[0]);
-  if (!db || !roomId) {
-    return Promise.resolve(labels[Math.floor(Math.random() * labels.length)]);
-  }
+/** Тэнцүү хуваарилалт: 2 хувилбар × 10 сурагч → 5A+5B; 3 × 12 → 4A+4B+4C */
+const assignBalancedVariant = async (db, roomId, labels, studentName, classKey) => {
+  const sorted = (labels || []).filter(Boolean);
+  if (!sorted.length) return 'A';
+  if (sorted.length === 1) return sorted[0];
+
+  const localBalancedPick = () => {
+    const ck = normalizeClassKey(classKey) || 'default';
+    const storeKey = 'se_var_counts_' + (roomId || 'x') + '_' + ck;
+    let counts = {};
+    try { counts = JSON.parse(sessionStorage.getItem(storeKey) || '{}') || {}; } catch { counts = {}; }
+    sorted.forEach(l => { if (counts[l] == null) counts[l] = 0; });
+    const min = Math.min(...sorted.map(l => counts[l]));
+    const pool = sorted.filter(l => counts[l] === min);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    counts[pick] = (counts[pick] || 0) + 1;
+    try { sessionStorage.setItem(storeKey, JSON.stringify(counts)); } catch {}
+    return pick;
+  };
+
+  if (!db || !roomId) return localBalancedPick();
+
   const ck = normalizeClassKey(classKey) || 'default';
   const key = studentVariantKey(roomId, studentName);
   const studentRef = roomRef(db, roomId).child('variantByStudent').child(ck).child(key);
   const allocRef = roomRef(db, roomId).child('variantAllocator').child(ck);
 
-  return studentRef.once('value').then(snap => {
-    const existing = snap.val();
-    if (existing?.label && labels.includes(existing.label)) return existing.label;
+  try {
+    const existingSnap = await studentRef.once('value');
+    const existing = existingSnap.val();
+    if (existing?.label && sorted.includes(existing.label)) return existing.label;
 
-    return allocRef.transaction(cur => {
-      cur = cur || { counts: {} };
-      const old = { ...(cur.counts || {}) };
-      labels.forEach(l => { if (old[l] == null) old[l] = 0; });
-      const min = Math.min(...labels.map(l => old[l]));
-      const pool = labels.filter(l => old[l] === min);
+    const result = await allocRef.transaction(cur => {
+      const base = (cur && typeof cur === 'object') ? cur : {};
+      const old = { ...(base.counts || {}) };
+      sorted.forEach(l => { if (old[l] == null) old[l] = 0; });
+      const min = Math.min(...sorted.map(l => Number(old[l]) || 0));
+      const pool = sorted.filter(l => (Number(old[l]) || 0) === min);
       const pick = pool[Math.floor(Math.random() * pool.length)];
-      const neu = { ...old, [pick]: old[pick] + 1 };
-      return { counts: neu, lastPick: pick };
-    }).then((result, committed, snap) => {
-      if (!committed || !snap?.val()?.lastPick) {
-        throw new Error('Хувилбар томилох transaction амжилтгүй');
-      }
-      const pick = snap.val().lastPick;
+      return {
+        counts: { ...old, [pick]: (Number(old[pick]) || 0) + 1 },
+        lastPick: pick,
+        updatedAt: Date.now()
+      };
+    });
+
+    // Compat SDK: Promise resolves to { committed, snapshot } — NOT (result, committed, snap)
+    const committed = !!(result && result.committed);
+    const snapVal = result?.snapshot?.val?.() || null;
+    const pick = snapVal?.lastPick;
+    if (!committed || !pick || !sorted.includes(pick)) {
+      return localBalancedPick();
+    }
+
+    try {
       const authUid = getAuth()?.currentUser?.uid || null;
-      return studentRef.set({
+      await studentRef.set({
         label: pick,
         name: sanitizeText(studentName, 80),
         uid: authUid,
         at: firebase.database.ServerValue.TIMESTAMP
-      }).then(() => pick);
-    });
-  });
+      });
+    } catch {
+      // Count already reserved; still return pick for this student
+    }
+    return pick;
+  } catch (e) {
+    console.warn('variant assign fallback', e);
+    return localBalancedPick();
+  }
 };
 
 // ─── OMR (OpenCV.js) ──────────────────────────────────────────────────────────
@@ -4334,23 +4365,24 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
 }
 
 // ─── OMR ANSWER SHEET (PRINT) ─────────────────────────────────────────────────
-function OMRAnswerSheet({ examTitle, examId, omrMode = 'mcq', subject = '' }) {
+function OMRAnswerSheet({ examTitle, examId, omrMode = 'mcq', subject = '', variantLabel = '' }) {
   const mode = omrMode === 'tf' ? 'tf' : omrMode === 'grid' ? 'grid' : 'mcq';
   const profile = getSubjectProfile(subject);
   const modeLabel = mode === 'tf' ? 'Зөв/Буруу' : mode === 'grid' ? 'Grid-in (0–9)' : 'A–D сонголт';
+  const vLabel = (variantLabel || '').trim();
 
   return (
-    <div className="omr-print-area">
+    <div className="omr-print-area" style={{ pageBreakAfter: vLabel ? 'always' : undefined }}>
       <div className={'omr-sheet fmt-' + mode}>
         <div className="omr-marker omr-marker-tl" />
         <div className="omr-marker omr-marker-tr" />
         <div className="omr-marker omr-marker-bl" />
         <div className="omr-marker omr-marker-br" />
         <div className="omr-sheet-head">
-          <h1>SmartEXAM — Хариултын хуудас</h1>
+          <h1>SmartEXAM — Хариултын хуудас{vLabel ? ` · ${vLabel}` : ''}</h1>
           <div style={{ fontSize: '11pt' }}>{examTitle || 'Шалгалт'}</div>
           {(subject || profile) && <div style={{ fontSize: '10pt' }}>{profile?.icon || ''} {subject || profile?.name}</div>}
-          <div className="omr-format-badge">Формат: {modeLabel}</div>
+          <div className="omr-format-badge">Формат: {modeLabel}{vLabel ? ` · Хувилбар ${vLabel}` : ''}</div>
           <div className="omr-sheet-meta">
             <span>Нэр: <span className="omr-meta-line" /></span>
             <span>Анги: <span className="omr-meta-line" style={{ minWidth: 80 }} /></span>
@@ -4685,9 +4717,21 @@ function OMRScannerPage({ exam, onBack, onSubmit }) {
           <div>
             <div className="no-print" style={{ marginBottom: 12 }}>
               <button className="btn btn-primary" onClick={() => window.print()}>🖨 Хэвлэх / PDF хадгалах</button>
+              <div style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--text2)' }}>
+                Хувилбар бүрийг тусдаа хуудас болгож хэвлэнэ (A/B/C…).
+              </div>
             </div>
             <div className="omr-print-wrap">
-              <OMRAnswerSheet examTitle={exam.title} examId={exam.id} omrMode={omrMode} subject={exam.subject} />
+              {(getExamVariantLabels(exam).length ? getExamVariantLabels(exam) : ['A']).map(vl => (
+                <OMRAnswerSheet
+                  key={vl}
+                  examTitle={exam.title}
+                  examId={exam.id}
+                  omrMode={omrMode}
+                  subject={exam.subject}
+                  variantLabel={vl}
+                />
+              ))}
             </div>
           </div>
         )}
