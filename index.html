@@ -5,19 +5,105 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com https://www.gstatic.com https://cdn.jsdelivr.net https://docs.opencv.org; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebaseio.com wss://*.firebasedatabase.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.groq.com https://*.googleapis.com https://*.cloudfunctions.net; frame-ancestors 'none'; base-uri 'self'">
 <title>SmartEXAM — Ухаалаг Шалгалтын Систем</title>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com">
+<link rel="preconnect" href="https://securetoken.googleapis.com">
+<link rel="preconnect" href="https://cuee-93e28-default-rtdb.firebaseio.com">
+<link rel="dns-prefetch" href="https://unpkg.com">
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<script>
+/* Safari cold-start: warm Auth + prefetch QR room WHILE Babel/React still load */
+window.__SE_FB_CONFIG__ = {
+  apiKey: "AIzaSyBO18OgfofDR181gCYKJwQcvJvtB1gxPnU",
+  authDomain: "cuee-93e28.firebaseapp.com",
+  projectId: "cuee-93e28",
+  storageBucket: "cuee-93e28.firebasestorage.app",
+  messagingSenderId: "261582018432",
+  appId: "1:261582018432:web:4c8f5fed2717a6e54e9365",
+  measurementId: "G-WZWE66KMNC",
+  databaseURL: "https://cuee-93e28-default-rtdb.firebaseio.com"
+};
+window.__SE_IS_QR__ = (location.hash || '').indexOf('#qr=') === 0;
+(function () {
+  function getApp() {
+    try {
+      if (firebase.apps && firebase.apps.length) return firebase.app();
+      return firebase.initializeApp(window.__SE_FB_CONFIG__);
+    } catch (e) {
+      try { return firebase.app(); } catch (e2) { return null; }
+    }
+  }
+  var app = getApp();
+  if (!app || !firebase.auth) return;
+  var auth = firebase.auth(app);
+  try { auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (e) {}
+  var authWarm = (auth.authStateReady ? auth.authStateReady() : Promise.resolve()).then(function () {
+    if (auth.currentUser) return auth.currentUser;
+    return auth.signInAnonymously().then(function (c) { return c.user; });
+  }).catch(function () { return null; });
+  window.__SE_AUTH_WARM__ = authWarm;
+
+  function parseQrHash() {
+    var hash = location.hash || '';
+    if (hash.indexOf('#qr=') !== 0) {
+      try {
+        var boot = JSON.parse(sessionStorage.getItem('se_qr_boot') || 'null');
+        if (boot && boot.roomID && (Date.now() - (boot.t || 0)) < 120000) return boot;
+      } catch (e) {}
+      return null;
+    }
+    try {
+      var packed = JSON.parse(LZString.decompressFromEncodedURIComponent(hash.slice(4)));
+      var roomID = packed && packed.r;
+      var classKey = (packed && packed.c) || '';
+      if (!roomID) return null;
+      var info = { roomID: roomID, classKey: classKey, t: Date.now() };
+      try { sessionStorage.setItem('se_qr_boot', JSON.stringify(info)); } catch (e) {}
+      return info;
+    } catch (e) { return null; }
+  }
+
+  var qr = parseQrHash();
+  if (!qr) return;
+  window.__SE_IS_QR__ = true;
+  window.__SE_QR_PREFETCH__ = {
+    roomID: qr.roomID,
+    classKey: qr.classKey || '',
+    promise: authWarm.then(function (user) {
+      if (!user) throw new Error('auth');
+      var db = firebase.database(app);
+      return db.ref('activeRooms/' + qr.roomID + '/clientPack').once('value');
+    }).then(function (snap) {
+      return { roomID: qr.roomID, classKey: qr.classKey || '', pack: snap.val() };
+    }).catch(function (err) {
+      return { roomID: qr.roomID, classKey: qr.classKey || '', pack: null, error: err };
+    })
+  };
+})();
+</script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
 <script src="js/se-security.js"></script>
+<script>
+/* Skip heavy XLSX on QR student open (Safari cold start) */
+(function () {
+  if (window.__SE_IS_QR__) return;
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.async = true;
+  document.head.appendChild(s);
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"></noscript>
 <style>
 :root {
   --bg: #f0f4ff;
@@ -1091,15 +1177,28 @@ const getFunctions = () => {
 const ensureStudentAuth = async () => {
   const auth = getAuth();
   if (!auth) throw new Error('Firebase Auth холбогдоогүй');
+  // Reuse Safari/Chrome early warm promise when available
+  if (window.__SE_AUTH_WARM__) {
+    try {
+      const u = await window.__SE_AUTH_WARM__;
+      if (u || auth.currentUser) return auth.currentUser || u;
+    } catch {}
+  }
   try { if (auth.authStateReady) await auth.authStateReady(); } catch {}
   if (auth.currentUser) return auth.currentUser;
+  try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch {}
   const cred = await auth.signInAnonymously();
   return cred.user;
 };
 
 /** Warm anonymous auth early so QR/code join is instant */
 const prefetchStudentAuth = () => {
-  try { ensureStudentAuth().catch(() => {}); } catch {}
+  try {
+    if (window.__SE_AUTH_WARM__) return window.__SE_AUTH_WARM__;
+    const p = ensureStudentAuth().catch(() => null);
+    window.__SE_AUTH_WARM__ = p;
+    return p;
+  } catch { return Promise.resolve(null); }
 };
 
 const ensureTeacherAuth = () => {
@@ -1180,7 +1279,7 @@ const fmtDur = (sec) => {
 // ─── FIREBASE (built-in config) ───────────────────────────────────────────────
 // Default Firebase config is embedded in code (no manual setup needed).
 // You can still override it by setting localStorage key: se_firebase_config
-const FIREBASE_DEFAULT_CONFIG = {
+const FIREBASE_DEFAULT_CONFIG = (typeof window !== 'undefined' && window.__SE_FB_CONFIG__) || {
   apiKey: "AIzaSyBO18OgfofDR181gCYKJwQcvJvtB1gxPnU",
   authDomain: "cuee-93e28.firebaseapp.com",
   projectId: "cuee-93e28",
@@ -2011,11 +2110,21 @@ const fetchExamRoomByCode = async (code) => {
   const db = getDb();
   if (!db) return Promise.reject(new Error('Интернет/Firebase холбогдоогүй. Дахин оролдоно уу.'));
 
-  // Auth + first data read
-  await ensureStudentAuth();
-
-  const ref = roomRef(db, roomId);
   try {
+    // Safari: use data prefetched during Babel compile
+    const pre = window.__SE_QR_PREFETCH__;
+    if (pre?.promise && pre.roomID === roomId) {
+      const got = await pre.promise;
+      window.__SE_QR_PREFETCH__ = null;
+      if (got?.pack?.versions) {
+        if (got.pack.stopped) throw new Error('Энэ шалгалтыг багш зогсоосон байна.');
+        return normalizeRoomExam(roomId, got.pack);
+      }
+    }
+
+    await ensureStudentAuth();
+
+    const ref = roomRef(db, roomId);
     // Fast path: one node with everything students need (no answerKeys)
     const packSnap = await ref.child('clientPack').once('value');
     const pack = packSnap.val();
@@ -5613,9 +5722,11 @@ function App() {
     return () => unsub();
   }, []);
 
-  // Handle QR URL hash on load
+  // Handle QR URL hash on load (Safari may clear hash — also check sessionStorage)
   useEffect(() => {
     prefetchStudentAuth();
+    let roomID = null;
+    let classKey = '';
     const hash = window.location.hash;
     if (hash.startsWith('#qr=')) {
       try {
@@ -5623,11 +5734,30 @@ function App() {
         const json = LZString.decompressFromEncodedURIComponent(compressed);
         const packed = JSON.parse(json);
         const parsed = unpackExamFromQR(packed);
-        if (parsed?.roomID) {
-          setPage({ type: 'qrRoom', roomID: parsed.roomID, qrClassKey: parsed.classKey || '' });
-          window.location.hash = '';
+        roomID = parsed?.roomID || null;
+        classKey = parsed?.classKey || '';
+        try {
+          sessionStorage.setItem('se_qr_boot', JSON.stringify({ roomID, classKey, t: Date.now() }));
+        } catch {}
+        history.replaceState(null, '', appUrlWithHash(''));
+      } catch (e) { console.error('QR decode error', e); }
+    }
+    if (!roomID) {
+      try {
+        const boot = JSON.parse(sessionStorage.getItem('se_qr_boot') || 'null');
+        if (boot?.roomID && (Date.now() - (boot.t || 0)) < 120000) {
+          roomID = boot.roomID;
+          classKey = boot.classKey || window.__SE_QR_PREFETCH__?.classKey || '';
         }
-      } catch(e) { console.error('QR decode error', e); }
+      } catch {}
+    }
+    if (window.__SE_QR_PREFETCH__?.roomID) {
+      roomID = roomID || window.__SE_QR_PREFETCH__.roomID;
+      classKey = classKey || window.__SE_QR_PREFETCH__.classKey || '';
+    }
+    if (roomID) {
+      try { sessionStorage.removeItem('se_qr_boot'); } catch {}
+      setPage({ type: 'qrRoom', roomID, qrClassKey: classKey || '' });
     }
   }, []);
 
