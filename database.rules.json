@@ -74,6 +74,11 @@
           ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
         },
 
+        "clientPack": {
+          ".read": "auth != null",
+          ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"
+        },
+
         "answerKeys": {
           ".read": "auth != null && root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid",
           ".write": "auth != null && (!root.child('activeRooms').child($roomId).child('ownerUid').exists() || root.child('activeRooms').child($roomId).child('ownerUid').val() == auth.uid)"

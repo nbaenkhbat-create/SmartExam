@@ -1091,9 +1091,15 @@ const getFunctions = () => {
 const ensureStudentAuth = async () => {
   const auth = getAuth();
   if (!auth) throw new Error('Firebase Auth холбогдоогүй');
+  try { if (auth.authStateReady) await auth.authStateReady(); } catch {}
   if (auth.currentUser) return auth.currentUser;
   const cred = await auth.signInAnonymously();
   return cred.user;
+};
+
+/** Warm anonymous auth early so QR/code join is instant */
+const prefetchStudentAuth = () => {
+  try { ensureStudentAuth().catch(() => {}); } catch {}
 };
 
 const ensureTeacherAuth = () => {
@@ -1968,41 +1974,91 @@ const pickVariantForStudent = async (roomExam, studentName, studentClass) => {
   return buildExamWithVariant(roomExam, label);
 };
 
+const buildClientPack = (exam, versions) => ({
+  roomID: exam.id || exam.roomID,
+  title: exam.title || 'Шалгалт',
+  subject: exam.subject || '',
+  subjectId: exam.subjectId || '',
+  duration: exam.duration || 45,
+  passingScore: exam.passingScore ?? 60,
+  omrFormat: exam.omrFormat || 'mcq',
+  omrMode: exam.omrMode || 'mcq',
+  ownerUid: exam.ownerUid || '',
+  stopped: !!exam.stopped,
+  createdAt: exam.createdAt || null,
+  versions: versions || exam.versions || {}
+});
+
+const normalizeRoomExam = (roomId, val) => ({
+  roomID: val.roomID || roomId,
+  id: val.roomID || roomId,
+  title: val.title || 'Шалгалт',
+  subject: val.subject || '',
+  subjectId: val.subjectId || '',
+  duration: val.duration || 45,
+  passingScore: val.passingScore ?? 60,
+  omrFormat: val.omrFormat || 'mcq',
+  omrMode: val.omrMode || 'mcq',
+  ownerUid: val.ownerUid || '',
+  stopped: !!val.stopped,
+  versions: val.versions,
+  createdAt: val.createdAt
+});
+
 const fetchExamRoomByCode = async (code) => {
   const roomId = (code || '').trim();
   if (!roomId) return Promise.reject(new Error('Тестийн код оруулна уу'));
   const db = getDb();
   if (!db) return Promise.reject(new Error('Интернет/Firebase холбогдоогүй. Дахин оролдоно уу.'));
+
+  // Auth + first data read
   await ensureStudentAuth();
+
   const ref = roomRef(db, roomId);
-  // Students cannot read the whole room (answerKeys are owner-only), so fetch public fields only.
-  const fields = [
-    'roomID', 'title', 'subject', 'subjectId', 'duration', 'passingScore',
-    'omrFormat', 'omrMode', 'ownerUid', 'stopped', 'createdAt', 'versions', 'publicReadable'
-  ];
   try {
-    const snaps = await Promise.all(fields.map(f => ref.child(f).once('value')));
-    const val = {};
-    fields.forEach((f, i) => { val[f] = snaps[i].val(); });
-    if (!val.versions) {
-      throw new Error('Тестийн код олдсонгүй. Багшийн өгсөн кодыг яг хуулж оруулна уу.');
+    // Fast path: one node with everything students need (no answerKeys)
+    const packSnap = await ref.child('clientPack').once('value');
+    const pack = packSnap.val();
+    if (pack?.versions) {
+      if (pack.stopped) throw new Error('Энэ шалгалтыг багш зогсоосон байна.');
+      return normalizeRoomExam(roomId, pack);
     }
-    if (val.stopped) throw new Error('Энэ шалгалтыг багш зогсоосон байна.');
-    return {
-      roomID: val.roomID || roomId,
-      id: val.roomID || roomId,
-      title: val.title || 'Шалгалт',
-      subject: val.subject || '',
-      subjectId: val.subjectId || '',
-      duration: val.duration || 45,
-      passingScore: val.passingScore ?? 60,
-      omrFormat: val.omrFormat || 'mcq',
-      omrMode: val.omrMode || 'mcq',
-      ownerUid: val.ownerUid || '',
-      stopped: !!val.stopped,
-      versions: val.versions,
-      createdAt: val.createdAt
-    };
+
+    // Legacy rooms (no clientPack yet): few parallel reads only
+    const [verSnap, metaSnaps] = await Promise.all([
+      ref.child('versions').once('value'),
+      Promise.all([
+        ref.child('stopped').once('value'),
+        ref.child('title').once('value'),
+        ref.child('subject').once('value'),
+        ref.child('subjectId').once('value'),
+        ref.child('duration').once('value'),
+        ref.child('passingScore').once('value'),
+        ref.child('omrFormat').once('value'),
+        ref.child('omrMode').once('value'),
+        ref.child('ownerUid').once('value'),
+        ref.child('createdAt').once('value'),
+        ref.child('roomID').once('value')
+      ])
+    ]);
+    const versions = verSnap.val();
+    if (!versions) throw new Error('Тестийн код олдсонгүй. Багшийн өгсөн кодыг яг хуулж оруулна уу.');
+    const [stoppedSnap, titleSnap, subjectSnap, subjectIdSnap, durationSnap, passSnap, omrFSnap, omrMSnap, ownerSnap, createdSnap, roomIdSnap] = metaSnaps;
+    if (stoppedSnap.val()) throw new Error('Энэ шалгалтыг багш зогсоосон байна.');
+    return normalizeRoomExam(roomId, {
+      roomID: roomIdSnap.val() || roomId,
+      title: titleSnap.val(),
+      subject: subjectSnap.val(),
+      subjectId: subjectIdSnap.val(),
+      duration: durationSnap.val(),
+      passingScore: passSnap.val(),
+      omrFormat: omrFSnap.val(),
+      omrMode: omrMSnap.val(),
+      ownerUid: ownerSnap.val(),
+      stopped: !!stoppedSnap.val(),
+      createdAt: createdSnap.val(),
+      versions
+    });
   } catch (e) {
     const msg = e?.message || String(e);
     if (/PERMISSION_DENIED|permission.?denied/i.test(msg)) {
@@ -2962,7 +3018,8 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
             publicReadable: true,
             createdAt: exam.createdAt,
             versions,
-            answerKeys
+            answerKeys,
+            clientPack: buildClientPack({ ...exam, ownerUid: teacher.uid }, versions)
           });
         }
         onSave(exam);
@@ -3235,6 +3292,22 @@ function QRModal({ exam, onClose }) {
   useEffect(() => {
     if (!exam?.id) return;
     const db = getDb();
+    // Backfill clientPack so QR students load in 1 RTDB read
+    try {
+      const teacher = ensureTeacherAuth();
+      if (db && teacher) {
+        const versions = {};
+        normalizeVariants(exam).forEach(v => {
+          const qs = (v.questions || []).filter(q => (q.text || '').trim());
+          if (qs.length) versions[v.label || 'A'] = packQuestions(qs);
+        });
+        if (Object.keys(versions).length) {
+          roomRef(db, exam.id).child('clientPack')
+            .set(buildClientPack({ ...exam, ownerUid: teacher.uid, id: exam.id }, versions))
+            .catch(() => {});
+        }
+      }
+    } catch {}
     const lastKey = (() => { try { return localStorage.getItem(lastQrClassStorageKey(exam.id)); } catch { return ''; } })();
     if (!db) {
       if (lastKey) {
@@ -3961,6 +4034,25 @@ function TeacherDashboard({ exams, submissions, apiKey, teacherName, onCreateExa
     }
     setZipGradePick(true);
   };
+
+  // Ensure clientPack exists for fast student/QR load
+  useEffect(() => {
+    const db = getDb();
+    const teacher = ensureTeacherAuth();
+    if (!db || !teacher || !exams?.length) return;
+    exams.forEach(exam => {
+      if (!exam?.id) return;
+      const versions = {};
+      normalizeVariants(exam).forEach(v => {
+        const qs = (v.questions || []).filter(q => (q.text || '').trim());
+        if (qs.length) versions[v.label || 'A'] = packQuestions(qs);
+      });
+      if (!Object.keys(versions).length) return;
+      roomRef(db, exam.id).child('clientPack')
+        .set(buildClientPack({ ...exam, ownerUid: teacher.uid, id: exam.id }, versions))
+        .catch(() => {});
+    });
+  }, [exams]);
 
   // Realtime submissions across devices (optional)
   useEffect(() => {
@@ -5505,6 +5597,9 @@ function App() {
     return () => window.removeEventListener('popstate', applyHash);
   }, []);
 
+  // Prefetch anonymous auth — QR/code join becomes much faster
+  useEffect(() => { prefetchStudentAuth(); }, []);
+
   // Auth state — anonymous-гүй багш session сэргээнэ
   useEffect(() => {
     const auth = getAuth();
@@ -5520,6 +5615,7 @@ function App() {
 
   // Handle QR URL hash on load
   useEffect(() => {
+    prefetchStudentAuth();
     const hash = window.location.hash;
     if (hash.startsWith('#qr=')) {
       try {
@@ -5718,20 +5814,25 @@ function App() {
         <QRRoomLoader
           roomID={page.roomID}
           onLoaded={(roomExam) => {
-            const db = getDb();
             const ck = page.qrClassKey || '';
-            const attachClass = (className) => {
-              setPage({
-                type: 'qrStudent',
-                exam: { ...roomExam, roomID: roomExam.roomID || page.roomID, qrClassKey: ck, qrClassName: className }
-              });
-            };
+            const guessed = ck ? displayClassName(ck, ck) : '';
+            // Show name screen immediately — refine class label in background
+            setPage({
+              type: 'qrStudent',
+              exam: { ...roomExam, roomID: roomExam.roomID || page.roomID, qrClassKey: ck, qrClassName: guessed }
+            });
+            const db = getDb();
             if (ck && db) {
               roomRef(db, page.roomID).child('classes').child(ck).once('value')
-                .then(snap => attachClass((snap.val()?.name) || ck))
-                .catch(() => attachClass(ck));
-            } else {
-              attachClass(ck ? displayClassName(ck, ck) : '');
+                .then(snap => {
+                  const name = snap.val()?.name;
+                  if (!name) return;
+                  setPage(p => (p.type === 'qrStudent' ? {
+                    ...p,
+                    exam: { ...p.exam, qrClassName: name }
+                  } : p));
+                })
+                .catch(() => {});
             }
           }}
           onBack={goHome}
