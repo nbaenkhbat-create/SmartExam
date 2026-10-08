@@ -88,7 +88,102 @@ window.__SE_IS_QR__ = (location.hash || '').indexOf('#qr=') === 0;
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-functions-compat.js"></script>
-<script src="js/se-security.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+(function (global) {
+  'use strict';
+  const SE_AUTH_SESSION = 'se_auth_session_v1';
+  const SE_TEACHER_META = 'se_teacher_meta_v1';
+  const secureUid = (bytes) => {
+    const n = bytes || 16;
+    const arr = new Uint8Array(n);
+    if (global.crypto && crypto.getRandomValues) crypto.getRandomValues(arr);
+    else { for (let i = 0; i < n; i++) arr[i] = (Math.random() * 256) | 0; }
+    return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
+  };
+  const sanitizeText = (s, max) => {
+    const lim = max || 500;
+    return String(s == null ? '' : s).replace(/[<>\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, lim);
+  };
+  const escapeHtml = (s) =>
+    String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const packQuestionsPublic = (questions) =>
+    (questions || []).map((q) => ({
+      text: sanitizeText(q.text, 2000),
+      options: (q.options || []).map((o) => ({ key: String(o.key || '').slice(0, 2), text: sanitizeText(o.text, 500) })),
+      type: q.type || 'mcq',
+      topic: sanitizeText(q.topic, 120),
+      imageUrl: sanitizeText(q.imageUrl, 500),
+      sourceText: sanitizeText(q.sourceText, 4000),
+      audioUrl: sanitizeText(q.audioUrl, 500),
+      unit: sanitizeText(q.unit, 40)
+    }));
+  const packAnswerKeys = (questions) =>
+    (questions || []).map((q, i) => ({
+      id: i + 1,
+      type: q.type || 'mcq',
+      answer: q.answer ?? q.numericAnswer ?? null,
+      topic: sanitizeText(q.topic, 120)
+    }));
+  const unpackQuestionsPublic = (questions) =>
+    (questions || []).map((q, idx) => {
+      const type = q?.type || 'mcq';
+      let options;
+      if (type === 'tf') {
+        options = [
+          { key: 'A', text: q?.options?.[0]?.text || 'Зөв / Үнэн' },
+          { key: 'B', text: q?.options?.[1]?.text || 'Буруу / Худал' }
+        ];
+      } else if (type === 'grid') {
+        options = [];
+      } else {
+        options = ['A', 'B', 'C', 'D'].map((key, oi) => {
+          const hit = (q?.options || []).find((o) => o?.key === key);
+          const byIndex = q?.options?.[oi];
+          return { key, text: hit?.text ?? byIndex?.text ?? '' };
+        });
+      }
+      return {
+        id: idx + 1, text: q?.text || '', options, answer: null, type,
+        topic: q?.topic || '', imageUrl: q?.imageUrl || '', sourceText: q?.sourceText || '',
+        audioUrl: q?.audioUrl || '', unit: q?.unit || '', numericAnswer: null
+      };
+    });
+  const answersEqual = (got, expected, type) => {
+    if (expected == null || expected === '') return false;
+    const g = String(got ?? '').trim().toUpperCase();
+    const e = String(expected).trim().toUpperCase();
+    if (type === 'grid') {
+      const gn = String(got ?? '').replace(/[_\D]/g, '');
+      const en = String(expected).replace(/\D/g, '');
+      return gn.length > 0 && en.length > 0 && gn === en;
+    }
+    return g === e;
+  };
+  const regradeSubmission = (sub, answerKeyList) => {
+    if (!sub || !Array.isArray(answerKeyList)) return sub;
+    const ans = sub.answers || {};
+    let correct = 0, total = 0;
+    answerKeyList.forEach((q) => {
+      if (q.answer == null || q.answer === '') return;
+      total++;
+      if (answersEqual(ans[q.id], q.answer, q.type)) correct++;
+    });
+    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
+    return { ...sub, score, correctCount: correct, totalCount: total || sub.totalCount || 0, verified: true, gradedBy: sub.gradedBy === 'cloud' ? 'cloud' : 'teacher-regrade' };
+  };
+  const saveTeacherMeta = (meta) => { try { localStorage.setItem(SE_TEACHER_META, JSON.stringify(meta)); } catch (_) {} };
+  const loadTeacherMeta = () => { try { return JSON.parse(localStorage.getItem(SE_TEACHER_META) || 'null'); } catch { return null; } };
+  const clearTeacherMeta = () => { try { localStorage.removeItem(SE_TEACHER_META); localStorage.removeItem(SE_AUTH_SESSION); } catch (_) {} };
+  global.SESecurity = {
+    secureUid, sanitizeText, escapeHtml, packQuestionsPublic, packAnswerKeys, unpackQuestionsPublic,
+    answersEqual, regradeSubmission, saveTeacherMeta, loadTeacherMeta, clearTeacherMeta, SE_AUTH_SESSION, SE_TEACHER_META
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
 <script>
 /* Skip heavy XLSX on QR student open (Safari cold start) */
 (function () {
@@ -2364,42 +2459,312 @@ const groqRequest = async (apiKey, { systemPrompt, userPrompt, maxTokens = 4096,
   throw lastErr || new Error(GROQ_AI_BUSY_MSG);
 };
 
-const parseTestWithAI = async (rawText, apiKey) => {
-  const sys = `You are an exam question parser. Parse the multiple-choice questions from the given text and return ONLY valid JSON (no markdown, no explanation).
+const LETTER_KEY = (ch) => {
+  const u = String(ch || '').trim().charAt(0);
+  const map = { А: 'A', Б: 'B', В: 'C', Г: 'D', а: 'A', б: 'B', в: 'C', г: 'D' };
+  if (map[u]) return map[u];
+  const U = u.toUpperCase();
+  return 'ABCD'.includes(U) ? U : null;
+};
 
-Return a JSON object with this exact shape:
+const rebuildPdfPageText = (items, pageWidth) => {
+  const mid = (pageWidth || 0) / 2;
+  const xs = (items || []).map((it) => it.transform[4]);
+  const hasCols = pageWidth && xs.filter((x) => x > mid + 18).length > items.length * 0.22
+    && xs.filter((x) => x < mid - 18).length > items.length * 0.22;
+  const group = (list) => {
+    const rows = [];
+    (list || []).forEach((it) => {
+      const str = it.str == null ? '' : String(it.str);
+      if (!str) return;
+      const x = it.transform[4];
+      const y = it.transform[5];
+      const h = Math.abs(it.height || it.transform[3] || 10);
+      const tol = Math.max(2.4, h * 0.42);
+      let row = rows.find((r) => Math.abs(r.y - y) < tol);
+      if (!row) { row = { y, parts: [] }; rows.push(row); }
+      row.parts.push({ x, w: it.width || 0, str });
+    });
+    rows.sort((a, b) => b.y - a.y);
+    return rows.map((r) => {
+      r.parts.sort((a, b) => a.x - b.x);
+      let s = '';
+      let prev = null;
+      r.parts.forEach((p) => {
+        if (prev && p.x > prev.x + (prev.w || 0) + 1.1 && !/\s$/.test(s) && !/^\s/.test(p.str)) s += ' ';
+        s += p.str;
+        prev = p;
+      });
+      return s.replace(/[ \t]+/g, ' ').trim();
+    }).filter(Boolean);
+  };
+  if (!hasCols) return group(items).join('\n');
+  const left = items.filter((it) => it.transform[4] < mid);
+  const right = items.filter((it) => it.transform[4] >= mid);
+  return group(left).join('\n') + '\n' + group(right).join('\n');
+};
+
+const extractPdfText = async (file, onPage) => {
+  if (!window.pdfjsLib) throw new Error('PDF сан ачаалагдаагүй. Хуудсыг дахин ачаална уу.');
+  if (file.size > 40e6) throw new Error('Файл 40 MB-аас бага байх ёстой.');
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    if (onPage) onPage(p, pdf.numPages);
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const vp = page.getViewport({ scale: 1 });
+    pages.push(rebuildPdfPageText(tc.items || [], vp.width));
+  }
+  const txt = pages.join('\n\n').replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').trim();
+  if (txt.replace(/\s/g, '').length < 12) {
+    throw new Error('Энэ PDF-ээс текст олдсонгүй (скан/зураг байж магадгүй). Текстэн PDF эсвэл текстийг copy-paste хийнэ үү.');
+  }
+  return txt;
+};
+
+const extractInlineOptions = (line) => {
+  const re = /(?:^|\s)([A-DА-Гa-dа-г])[.)]\s+/g;
+  const matches = [...String(line).matchAll(re)];
+  if (matches.length < 2) return null;
+  const parts = [];
+  matches.forEach((m, i) => {
+    const key = LETTER_KEY(m[1]);
+    const start = m.index + m[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1].index : line.length;
+    if (key) parts.push({ key, text: String(line).slice(start, end).trim() });
+  });
+  return parts.length >= 2 ? parts : null;
+};
+
+const applyAnswerToken = (q, token) => {
+  if (!q || token == null) return;
+  const t = String(token).trim();
+  const letter = LETTER_KEY(t);
+  if (letter) { q.answer = letter; return; }
+  const digits = t.replace(/[_\s]/g, '').replace(/[^\d.-]/g, '');
+  if (/^-?\d+(\.\d+)?$/.test(digits) && !(q.options || []).some((o) => o.text)) {
+    q.type = 'grid';
+    q.numericAnswer = digits;
+    q.answer = digits;
+  }
+};
+
+const parseQuestionsLocal = (rawText) => {
+  const rawLines = String(rawText || '').replace(/\r/g, '').split('\n');
+  const lines = [];
+  for (let i = 0; i < rawLines.length; i++) {
+    const a = String(rawLines[i] || '').replace(/[ \t]+/g, ' ').trim();
+    const b = String(rawLines[i + 1] || '').replace(/[ \t]+/g, ' ').trim();
+    if (/^(?:№\s*)?\d{1,3}\.?$/.test(a) && b && !/^(?:№\s*)?\d{1,3}(?:[.)．。:]|\s)/.test(b)) {
+      lines.push(a.replace(/\.$/, '') + '. ' + b);
+      i++;
+      continue;
+    }
+    lines.push(rawLines[i]);
+  }
+  const out = [];
+  let cur = null;
+  const startQ = (n, rest) => {
+    cur = { n, id: n, text: (rest || '').trim(), options: [], answer: null, type: 'mcq', numericAnswer: null };
+    out.push(cur);
+    const inline = extractInlineOptions(cur.text);
+    if (inline) {
+      const first = cur.text.search(/(?:^|\s)([A-DА-Гa-dа-г])[.)]\s+/);
+      if (first > 0) cur.text = cur.text.slice(0, first).trim();
+      inline.forEach((o) => {
+        if (!cur.options.some((x) => x.key === o.key)) cur.options.push(o);
+      });
+    }
+  };
+  lines.forEach((raw) => {
+    const line = String(raw || '').replace(/[ \t]+/g, ' ').trim();
+    if (!line) return;
+    let m;
+    if (/^(нэр|огноо|анги|хичээл|хугацаа|код|тест|шалгалт)\s*[:：]/i.test(line) && !cur) return;
+    if (cur && (m = line.match(/^\s*(?:зөв\s*)?(?:хариу(?:лт)?|answer|ans|correct)\s*[:：]\s*(.+)/i))) {
+      applyAnswerToken(cur, m[1]);
+      return;
+    }
+    if (m = line.match(/^\s*(?:(?:асуулт|question|даалгавар|тест)\s+)?(?:№\s*)?(\d{1,3})\s*(?:[.)．。:]|\s+[-–—]\s+)\s*(.*)$/i)) {
+      const n = +m[1];
+      const rest = m[2] || '';
+      const lastN = cur ? cur.n : 0;
+      const looksOptNum = cur && n >= 1 && n <= 4 && n === cur.options.length + 1 && n !== lastN + 1 && lastN > 0;
+      if (looksOptNum) {
+        cur.options.push({ key: 'ABCD'[n - 1], text: rest.trim() });
+        return;
+      }
+      const isSeq = !cur || n === lastN + 1 || (n > lastN && n - lastN <= 2);
+      const restart = !!(cur && n === 1 && lastN >= 8 && (cur.options.length >= 2 || (cur.text || '').length > 24));
+      if (isSeq || restart) {
+        startQ(n, rest);
+        return;
+      }
+    }
+    if (cur && (m = line.match(/^\s*(?:\(?\s*)([A-DА-Гa-dа-г])(?:\s*\)|\s*[.)．])\s*(.*)$/))) {
+      const key = LETTER_KEY(m[1]);
+      const rest = (m[2] || '').trim();
+      const inline = extractInlineOptions(line);
+      if (inline) {
+        inline.forEach((o) => { if (!cur.options.some((x) => x.key === o.key)) cur.options.push(o); });
+        return;
+      }
+      if (key) {
+        const existing = cur.options.find((o) => o.key === key);
+        if (existing) existing.text = (existing.text + ' ' + rest).trim();
+        else cur.options.push({ key, text: rest });
+      }
+      return;
+    }
+    if (cur) {
+      const inline = extractInlineOptions(line);
+      if (inline && cur.options.length < 2) {
+        inline.forEach((o) => { if (!cur.options.some((x) => x.key === o.key)) cur.options.push(o); });
+        return;
+      }
+      if (/[*✓✔]|(\(correct\)|\(зөв\))/i.test(line) && cur.options.length) {
+        const k = LETTER_KEY(line);
+        if (k) cur.answer = k;
+      }
+      cur.text = (cur.text + ' ' + line).replace(/\s+/g, ' ').trim();
+    }
+  });
+  return out.filter((q) => (q.text && q.text.trim()) || (q.options || []).some((o) => (o.text || '').trim()));
+};
+
+const finalizeImportedQuestions = (list) => {
+  const tfRe = /зөв|үнэн|буруу|худал|true|false/i;
+  return (list || []).map((q, i) => {
+    const optsIn = q.options || [];
+    const filled = optsIn.filter((o) => (o.text || '').trim()).length;
+    let type = q.type || 'mcq';
+    if (type !== 'grid' && filled === 2 && optsIn.every((o) => tfRe.test(o.text || ''))) type = 'tf';
+    if (type !== 'tf' && filled === 0 && (q.numericAnswer || /^\d+(\.\d+)?$/.test(String(q.answer || '')))) type = 'grid';
+    let options;
+    if (type === 'tf') options = defaultOptionsForType('tf');
+    else if (type === 'grid') options = [];
+    else {
+      options = ['A', 'B', 'C', 'D'].map((key, oi) => {
+        const hit = optsIn.find((o) => o.key === key) || optsIn[oi];
+        return { key, text: (hit && hit.text) || '' };
+      });
+    }
+    let answer = q.answer ?? q.numericAnswer ?? null;
+    if (answer != null && type !== 'grid') {
+      const k = LETTER_KEY(answer);
+      answer = k || String(answer).trim().slice(0, 8);
+    }
+    return {
+      id: i + 1,
+      text: (q.text || '').trim(),
+      type,
+      topic: q.topic || '',
+      options,
+      answer,
+      sourceText: q.sourceText || '',
+      imageUrl: q.imageUrl || '',
+      audioUrl: q.audioUrl || '',
+      unit: q.unit || '',
+      numericAnswer: type === 'grid' ? (q.numericAnswer || q.answer || null) : null
+    };
+  });
+};
+
+const mergeLocalAndAi = (local, ai) => {
+  if (!local.length) return ai || [];
+  const byN = new Map();
+  local.forEach((q, i) => byN.set(q.n || q.id || i + 1, { ...q, options: [...(q.options || [])] }));
+  (ai || []).forEach((q, i) => {
+    const n = Number(q.id) || i + 1;
+    const prev = byN.get(n);
+    const aiOpts = (q.options || []).map((o) => ({ key: LETTER_KEY(o.key) || o.key, text: o.text || '' }));
+    if (!prev) {
+      byN.set(n, { n, id: n, text: q.text || '', options: aiOpts, answer: q.answer ?? null, type: q.type || 'mcq', numericAnswer: q.numericAnswer ?? null });
+      return;
+    }
+    if ((q.text || '').length > (prev.text || '').length + 8) prev.text = q.text;
+    if ((q.answer || q.numericAnswer) && !prev.answer) {
+      prev.answer = q.answer ?? q.numericAnswer;
+      prev.numericAnswer = q.numericAnswer ?? prev.numericAnswer;
+    }
+    const aiFilled = aiOpts.filter((o) => (o.text || '').trim()).length;
+    const locFilled = (prev.options || []).filter((o) => (o.text || '').trim()).length;
+    if (aiFilled > locFilled) prev.options = aiOpts;
+    if (q.type) prev.type = q.type;
+  });
+  return [...byN.entries()].sort((a, b) => a[0] - b[0]).map(([, q]) => q);
+};
+
+const groqParseChunk = async (apiKey, rawChunk) => {
+  const sys = `You are an exam question parser. Parse EVERY question in the given text. Do not skip, omit, merge, or summarize any item. Return ONLY valid JSON.
+
+Return a JSON object:
 {"questions":[
   {
-    "id": <number, 1-based>,
-    "text": "<question text, use ________ for blanks>",
-    "options": [
-      {"key": "A", "text": "<option text>"},
-      {"key": "B", "text": "<option text>"},
-      {"key": "C", "text": "<option text>"},
-      {"key": "D", "text": "<option text>"}
-    ],
-    "answer": "<correct key letter like A/B/C/D, or null if not marked>"
+    "id": <original question number>,
+    "text": "<question text>",
+    "options": [{"key":"A","text":"..."},{"key":"B","text":"..."},{"key":"C","text":"..."},{"key":"D","text":"..."}],
+    "answer": "<A/B/C/D or numeric string or null>"
   }
 ]}
 
 Rules:
-- Normalize any format to the schema above
-- Clean up whitespace and formatting
-- If a question has a marked answer (asterisk, ✓, (correct), etc.), capture it
-- Always include exactly 4 options per question; if missing, create plausible distractors
-- The response MUST be a JSON object with a "questions" array`;
-
+- Include every numbered question even if options are incomplete
+- Keep original numbering in id
+- Do not invent extra questions
+- If an answer is marked, capture it; otherwise null
+- True/false may have 2 options; numeric/grid may have empty options`;
   const text = await groqRequest(apiKey, {
     systemPrompt: sys,
-    userPrompt: rawText,
+    userPrompt: rawChunk,
     maxTokens: 8192,
     jsonObject: true
   });
   try {
     return normalizeAiQuestions(extractJsonPayload(text));
   } catch {
-    throw new Error('AI хариултыг JSON болгон задлахад алдаа гарлаа. Дахин оролдоно уу.');
+    return [];
   }
+};
+
+const formatLocalBlock = (q) => {
+  const opts = (q.options || []).map((o) => `${o.key}. ${o.text}`).join('\n');
+  const ans = q.answer ? `\nХариу: ${q.answer}` : '';
+  return `${q.n || q.id}. ${q.text || ''}\n${opts}${ans}`;
+};
+
+const parseTestWithAI = async (rawText, apiKey) => {
+  const local = parseQuestionsLocal(rawText);
+  if (!apiKey) {
+    if (!local.length) throw new Error('Асуулт илрэхгүй байна. Дугаарласан асуулт (1. 2. 3.) байгаа эсэхийг шалгана уу.');
+    return finalizeImportedQuestions(local);
+  }
+  let aiAll = [];
+  try {
+    if (local.length) {
+      const size = 8;
+      for (let i = 0; i < local.length; i += size) {
+        const slice = local.slice(i, i + size);
+        const part = await groqParseChunk(apiKey, slice.map(formatLocalBlock).join('\n\n'));
+        aiAll = aiAll.concat(part || []);
+      }
+    } else {
+      const chunks = [];
+      const t = String(rawText || '');
+      const step = 3500;
+      for (let i = 0; i < t.length; i += step) chunks.push(t.slice(i, i + step + 400));
+      for (const ch of chunks) {
+        const part = await groqParseChunk(apiKey, ch);
+        aiAll = aiAll.concat(part || []);
+      }
+    }
+  } catch (_) {
+    aiAll = [];
+  }
+  const merged = mergeLocalAndAi(local, aiAll);
+  if (!merged.length) throw new Error('Асуулт илрэхгүй байна');
+  return finalizeImportedQuestions(merged);
 };
 
 const groqChat = async (apiKey, systemPrompt, userPrompt, maxTokens = 4096) => {
@@ -2718,15 +3083,17 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
   const [raw, setRaw] = useState('');
   const [parsing, setParsing] = useState(false);
   const [err, setErr] = useState('');
+  const [status, setStatus] = useState('');
   const vLabel = currentVariantLabel || 'A';
 
-  const doParse = async () => {
-    if (!raw.trim()) return;
-    if (!apiKey) { onNeedApiKey?.(); return; }
+  const runParse = async (text) => {
+    const src = (text || '').trim();
+    if (!src) return;
     setParsing(true); setErr('');
     try {
-      const qs = await parseTestWithAI(raw, apiKey);
+      const qs = await parseTestWithAI(src, apiKey || '');
       if (!Array.isArray(qs) || qs.length === 0) throw new Error('Асуулт илрэхгүй байна');
+      setStatus(qs.length + ' асуулт бүгд орж ирлээ');
       onParsed(qs);
     } catch (e) {
       setErr('Алдаа: ' + (e?.message || 'Тодорхойгүй алдаа'));
@@ -2735,13 +3102,29 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
     }
   };
 
+  const doParse = () => runParse(raw);
+
+  const loadPdf = async (file) => {
+    if (!file) return;
+    setParsing(true); setErr(''); setStatus('PDF уншиж байна...');
+    try {
+      const txt = await extractPdfText(file, (p, n) => setStatus('Хуудас ' + p + ' / ' + n + ' задалж байна...'));
+      setRaw(txt);
+      setStatus('Текст бэлэн · ' + txt.split(/\n/).length + ' мөр · асуултуудыг задлаж байна...');
+      await runParse(txt);
+    } catch (e) {
+      setParsing(false);
+      setErr('Алдаа: ' + (e?.message || 'PDF'));
+    }
+  };
+
   return (
     <div>
       <div className="version-indicator" style={{marginBottom:16}}>
         <div className="version-indicator-icon">{vLabel}</div>
         <div className="version-indicator-text">
-          <div className="version-indicator-label">Хувилбар {vLabel} — текст paste</div>
-          <div className="version-indicator-sub">AI автоматаар стандарт формат руу хөрвүүлнэ</div>
+          <div className="version-indicator-label">Хувилбар {vLabel} — PDF / текст</div>
+          <div className="version-indicator-sub">Бүх дугаарласан асуултыг алгасалгүй оруулна</div>
         </div>
         {(variantCount || 1) < 5 && (
           <button className="btn btn-outline btn-sm" onClick={() => onVariantCountChange?.()} style={{flexShrink:0}}>
@@ -2750,29 +3133,35 @@ function AIParseStep({ apiKey, onParsed, onManual, onBack, variantCount, onVaria
         )}
       </div>
       <div className="ai-hint-box">
-        <div className="ai-icon">✨</div>
+        <div className="ai-icon">📄</div>
         <div className="ai-hint-text">
-          <strong>AI задлан шинжилгээ</strong> — Тестийн текстийг paste хийнэ үү.
+          <strong>PDF эсвэл текст импорт</strong> — Текстэн PDF-ээс бүх тест/даалгаврыг уншина. Скан (зураг) PDF-д OCR байхгүй.
         </div>
       </div>
       {parsing ? (
         <div className="parsing-overlay">
           <div className="spinner"></div>
-          <div style={{fontFamily:'Outfit',fontWeight:700}}>AI задлан шинжилж байна...</div>
+          <div style={{fontFamily:'Outfit',fontWeight:700}}>{status || 'Асуултуудыг задлаж байна...'}</div>
         </div>
       ) : (
         <>
           <div className="form-group">
-            <label className="form-label">Тестийн текст</label>
+            <label className="form-label">PDF файл</label>
+            <input type="file" accept="application/pdf,.pdf" className="form-input"
+              onChange={(e) => loadPdf(e.target.files && e.target.files[0])} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Эсвэл тестийн текст</label>
             <textarea className="form-textarea" style={{minHeight:200,fontFamily:'monospace',fontSize:'0.82rem'}}
               placeholder="Тестийн текстийг энд paste хийнэ үү..." value={raw} onChange={e => setRaw(e.target.value)} />
+            {status && !err && <div className="form-hint" style={{marginTop:6,color:'var(--green)'}}>{status}</div>}
             {err && <div className="form-error">⚠ {err}</div>}
           </div>
           <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
             <button className="btn btn-outline" onClick={onBack}>← Буцах</button>
             <div style={{display:'flex',gap:10}}>
               <button className="btn btn-outline" onClick={onManual}>✏ Гараар</button>
-              <button className="btn btn-violet" onClick={doParse} disabled={!raw.trim()}>✨ AI задлах</button>
+              <button className="btn btn-violet" onClick={doParse} disabled={!raw.trim()}>✨ Бүгдийг задлах</button>
             </div>
           </div>
         </>
@@ -3083,17 +3472,33 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
     setInlineErr('');
   };
 
+  const applyImportedQuestions = (qs) => {
+    if (!Array.isArray(qs) || !qs.length) throw new Error('Асуулт илрэхгүй');
+    setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v));
+    setShowInlineAI(false); setInlineRaw('');
+  };
+
   const doInlineParse = async () => {
     if (!inlineRaw.trim()) return;
-    if (!effectiveKey) { needApiKey(); return; }
     setInlineParsing(true); setInlineErr('');
     try {
-      const qs = await parseTestWithAI(inlineRaw, effectiveKey);
-      if (!Array.isArray(qs) || !qs.length) throw new Error('Асуулт илрэхгүй');
-      setVariants(prev => prev.map((v, idx) => idx === activeVar ? ({...v, questions: qs}) : v));
-      setShowInlineAI(false); setInlineRaw('');
+      applyImportedQuestions(await parseTestWithAI(inlineRaw, effectiveKey));
     } catch (e) {
       setInlineErr(e?.message || 'Алдаа');
+    } finally {
+      setInlineParsing(false);
+    }
+  };
+
+  const doInlinePdf = async (file) => {
+    if (!file) return;
+    setInlineParsing(true); setInlineErr('');
+    try {
+      const txt = await extractPdfText(file);
+      setInlineRaw(txt);
+      applyImportedQuestions(await parseTestWithAI(txt, effectiveKey));
+    } catch (e) {
+      setInlineErr(e?.message || 'PDF');
     } finally {
       setInlineParsing(false);
     }
@@ -3353,13 +3758,15 @@ function CreateExam({ apiKey, onApiKey, onSave, onCancel }) {
                         <div style={{textAlign:'center',padding:24}}><div className="spinner" /></div>
                       ) : (
                         <>
+                          <input type="file" accept="application/pdf,.pdf" className="form-input" style={{marginBottom:8}}
+                            onChange={(e) => doInlinePdf(e.target.files && e.target.files[0])} />
                           <textarea className="form-textarea" style={{minHeight:120,fontFamily:'monospace',fontSize:'0.82rem'}}
                             value={inlineRaw} onChange={e => setInlineRaw(e.target.value)}
-                            placeholder="Текст paste..." />
+                            placeholder="PDF эсвэл текстийг paste..." />
                           {inlineErr && <div className="form-error">{inlineErr}</div>}
                           <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
                             <button className="btn btn-outline btn-sm" onClick={() => setShowInlineAI(false)}>Болих</button>
-                            <button className="btn btn-violet btn-sm" onClick={doInlineParse}>✨ Задлах</button>
+                            <button className="btn btn-violet btn-sm" onClick={doInlineParse}>✨ Бүгдийг задлах</button>
                           </div>
                         </>
                       )}
